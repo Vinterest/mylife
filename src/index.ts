@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
 import type { Env } from './types';
-import { crawl } from './crawl';
-import { summarizeBatch } from './ai/summarize';
 import { quotaSnapshot } from './ai/quota';
 import { makePicks } from './picks';
-import { allSources, getItem, latestByChannel, logJob, pendingCount, picksForToday, recentJobs, weeklyCounts } from './db';
+import { allSources, getItem, latestByChannel, picksForToday, recentJobs, weeklyCounts } from './db';
 import { channelPage, homePage, quotaPage, soonPage } from './views/pages';
 import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
-import { cleanupFullTexts, ensureFullText, processFullTextQueue, translateItem, viewOf } from './fulltext';
+import { ensureFullText, translateItem, viewOf } from './fulltext';
+import { JOBS, runJob } from './jobs';
+import { thumbSvg } from './views/thumb';
 import { APPLE_TOUCH_PNG_B64 } from './icon-png';
-import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
+import { CHANNEL_ORDER, channelBySlug } from './util';
 import { ensureSchema } from './schema';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -45,6 +45,12 @@ app.get('/sw.js', (c) =>
     'Cache-Control': 'no-cache',
   })
 );
+// Ảnh đại diện tự vẽ cho nguồn không có thumbnail: /thumb/<mã nguồn>.svg
+app.get('/thumb/:id{[a-z0-9-]+\\.svg}', async (c) => {
+  const id = c.req.param('id').replace(/\.svg$/, '');
+  const src = c.env.DB ? await c.env.DB.prepare('SELECT name, channel FROM sources WHERE id = ?').bind(id).first<{ name: string; channel: string }>().catch(() => null) : null;
+  return c.body(thumbSvg(src?.name ?? 'MyLife', src?.channel ?? 'ai'), 200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+});
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 
 /* ---------- Bảo vệ: chỉ chủ sở hữu (qua Cloudflare Access) ---------- */
@@ -78,7 +84,7 @@ app.get('/hoc-tap', async (c) => {
   const byChannel: Record<string, Awaited<ReturnType<typeof latestByChannel>>> = {};
   const pickIds = new Set(picks.map((p) => p.id));
   for (const ch of CHANNEL_ORDER) byChannel[ch] = (await latestByChannel(env, ch, 8)).filter((i) => !pickIds.has(i.id)).slice(0, 4);
-  return c.html(homePage({ picks, byChannel, quota: await quotaSnapshot(env), pending: await pendingCount(env), weekly: await weeklyCounts(env) }));
+  return c.html(homePage({ picks, byChannel, quota: await quotaSnapshot(env), weekly: await weeklyCounts(env) }));
 });
 
 app.get('/hoc-tap/kenh/:slug', async (c) => {
@@ -92,25 +98,28 @@ app.get('/hoc-tap/kenh/:slug', async (c) => {
 app.get('/hoc-tap/bai/:id', async (c) => {
   const it = await getItem(c.env, Number(c.req.param('id')));
   if (!it) return c.notFound();
-  // Anh mở bài → lấy toàn văn ngay (ưu tiên), dịch tiếp trong nền.
-  const ft = await ensureFullText(c.env, it, 1);
+  // Mở bài → lấy toàn văn nếu chưa có. KHÔNG tự dịch: anh bấm "Dịch bài này" khi cần.
+  const ft = await ensureFullText(c.env, it, 0);
   if (!ft) return c.text('Không đọc được toàn văn', 500);
-  if (['fetched', 'partial', 'waiting_quota'].includes(ft.status)) {
-    c.executionCtx.waitUntil(translateItem(c.env, it.id, 4).catch(() => 0));
-  }
+  const v = viewOf(ft);
   const q = c.req.query('lang');
-  const lang: Lang = q === 'en' || q === 'bi' ? q : 'vi';
-  return c.html(readerPage(it, viewOf(ft), lang));
+  const lang: Lang = q === 'en' || q === 'bi' || q === 'vi' ? q : v.translatedCount > 0 ? 'vi' : 'en';
+  return c.html(readerPage(it, v, lang));
 });
 
-app.post('/hoc-tap/bai/:id/:action{xep-hang|dich-ai|lay-lai}', async (c) => {
+app.post('/hoc-tap/bai/:id/:action{dich|dich-ai|lay-lai}', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
   const id = Number(c.req.param('id'));
   const action = c.req.param('action');
-  if (action === 'xep-hang') await c.env.DB.prepare('UPDATE fulltexts SET priority = 1 WHERE item_id = ?').bind(id).run();
+  if (action === 'lay-lai') {
+    await c.env.DB.prepare(`DELETE FROM fulltexts WHERE item_id = ? AND status = 'fetch_failed'`).bind(id).run();
+    return c.redirect(`/hoc-tap/bai/${id}`, 303);
+  }
+  if (action === 'dich') await c.env.DB.prepare('UPDATE fulltexts SET priority = 1 WHERE item_id = ?').bind(id).run();
   if (action === 'dich-ai') await c.env.DB.prepare(`UPDATE fulltexts SET want_ai = 1, priority = 1, status = CASE WHEN status = 'translated' THEN 'partial' ELSE status END WHERE item_id = ?`).bind(id).run();
-  if (action === 'lay-lai') await c.env.DB.prepare(`DELETE FROM fulltexts WHERE item_id = ? AND status = 'fetch_failed'`).bind(id).run();
-  return c.redirect(`/hoc-tap/bai/${id}`, 303);
+  // Dịch ngay 2 lô đầu trong nền; phần còn lại dịch tiếp mỗi 5 phút.
+  c.executionCtx.waitUntil(translateItem(c.env, id, 2).catch(() => 0));
+  return c.redirect(`/hoc-tap/bai/${id}?lang=vi`, 303);
 });
 
 app.post('/hoc-tap/bai/:id/:action{giu|bo}', async (c) => {
@@ -125,8 +134,10 @@ app.post('/hoc-tap/bai/:id/:action{giu|bo}', async (c) => {
 
 app.get('/hoc-tap/han-muc', async (c) => {
   const { results: ft } = await c.env.DB.prepare('SELECT status, COUNT(*) AS n FROM fulltexts GROUP BY status').all<{ status: string; n: number }>();
-  const keys = { gemini: !!c.env.GEMINI_API_KEY, azure: !!c.env.AZURE_TRANSLATOR_KEY, deepl: !!c.env.DEEPL_API_KEY, google: !!c.env.GOOGLE_TRANSLATE_API_KEY };
-  return c.html(quotaPage({ quota: await quotaSnapshot(c.env), sources: await allSources(c.env), jobs: await recentJobs(c.env), pending: await pendingCount(c.env), hasGemini: keys.gemini, keys, fulltext: Object.fromEntries(ft.map((r) => [r.status, r.n])) }));
+  const keys = { gemini: !!c.env.GEMINI_API_KEY, workers_ai: !!c.env.AI, azure: !!c.env.AZURE_TRANSLATOR_KEY, deepl: !!c.env.DEEPL_API_KEY, google: !!c.env.GOOGLE_TRANSLATE_API_KEY, tts: !!c.env.GOOGLE_TTS_API_KEY };
+  const lastTick = await c.env.DB.prepare(`SELECT started_at FROM jobs_log WHERE job = 'tick' ORDER BY id DESC LIMIT 1`).first<{ started_at: string }>();
+  const requested = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM fulltexts WHERE priority = 1 AND status IN ('fetched','partial','waiting_quota')`).first<{ n: number }>();
+  return c.html(quotaPage({ quota: await quotaSnapshot(c.env), sources: await allSources(c.env), jobs: await recentJobs(c.env, 15), lastTick: lastTick?.started_at ?? null, requested: requested?.n ?? 0, keys, fulltext: Object.fromEntries(ft.map((r) => [r.status, r.n])) }));
 });
 
 app.get('/sap-co/:key', (c) => c.html(soonPage(c.req.param('key'))));
@@ -164,41 +175,10 @@ app.onError((err, c) => {
   );
 });
 
-/* ---------- Việc chạy nền ---------- */
-const JOBS: Record<string, (env: Env) => Promise<string>> = {
-  'crawl-rss': async (env) => {
-    const out = await crawl(env, 'rss');
-    return `${out}\n${await summarizeBatch(env)}`;
-  },
-  'crawl-arxiv': async (env) => {
-    const out = await crawl(env, 'arxiv');
-    return `${out}\n${await summarizeBatch(env)}`;
-  },
-  summarize: async (env) => `${await summarizeBatch(env)}\n${await processFullTextQueue(env)}`,
-  fulltext: (env) => processFullTextQueue(env),
-  picks: async (env) => `${await summarizeBatch(env)}\n${await makePicks(env, vnDay())}\n${await cleanupFullTexts(env)}`,
-};
-
-async function runJob(env: Env, job: string): Promise<void> {
-  const startedAt = new Date().toISOString();
-  try {
-    await logJob(env, job, startedAt, true, await JOBS[job](env));
-  } catch (e) {
-    await logJob(env, job, startedAt, false, e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e));
-  }
-}
-
-const CRON_TO_JOB: Record<string, string> = {
-  '0 */6 * * *': 'crawl-rss',
-  '0 23 * * *': 'crawl-arxiv',
-  '30 23 * * *': 'picks',
-  '*/30 * * * *': 'summarize',
-};
-
+/* ---------- Việc chạy nền: 1 cron mỗi 5 phút chạy một "nhịp" nhỏ (xem src/jobs.ts) ---------- */
 export default {
   fetch: app.fetch,
-  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    const job = CRON_TO_JOB[event.cron];
-    if (job) ctx.waitUntil(ensureSchema(env).then(() => runJob(env, job)));
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(ensureSchema(env).then(() => runJob(env, 'tick')));
   },
 } satisfies ExportedHandler<Env>;

@@ -67,7 +67,10 @@ export async function ensureFullText(env: Env, it: ItemRow, priority = 0): Promi
       `INSERT OR REPLACE INTO fulltexts (item_id, status, kind, base_url, blocks_en, blocks_vi, engines, chars_en, public_partial, want_ai, priority, error, fetched_at)
        VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, 0, ?, NULL, ?)`
     ).bind(it.id, f.kind === 'abstract' ? 'abstract_only' : 'fetched', f.kind, f.baseUrl, JSON.stringify(f.blocks), chars, f.publicPartial ? 1 : 0, priority, now).run();
-    // Bài chỉ có tóm tắt vẫn dịch (để đọc tiếng Việt), nên đưa vào hàng dịch.
+    // Chưa có ảnh đại diện (vd arXiv) → dùng hình đầu tiên trong toàn văn.
+    const firstImg = f.blocks.find((b) => b.k === 'img' && b.src)?.src;
+    if (firstImg && !it.image_url) await env.DB.prepare('UPDATE items SET image_url = ? WHERE id = ? AND image_url IS NULL').bind(firstImg, it.id).run();
+    // Bài chỉ có phần mô tả vẫn dịch được khi anh bấm nút.
     if (f.kind === 'abstract') await env.DB.prepare(`UPDATE fulltexts SET status = 'fetched' WHERE item_id = ? AND chars_en > 0`).bind(it.id).run();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -109,49 +112,43 @@ export async function translateItem(env: Env, itemId: number, maxChunks: number)
   return done;
 }
 
-const FETCH_PER_RUN = 3;
-const CHUNKS_PER_RUN = 6;
-
 /**
- * Hàng đợi toàn văn (chạy mỗi 30 phút):
- * 1. Lấy toàn văn cho bài Đáng đọc hôm nay và bài anh đã giữ.
- * 2. Dịch tiếp theo thứ tự: bài anh mở/xếp hàng → Đáng đọc → bài đã giữ.
+ * Tự lấy toàn văn (không dịch) cho 1 bài mỗi lượt: bài đã giữ → Đáng đọc hôm nay → bài mới nhất.
+ * Tăng `attempts` TRƯỚC khi lấy: nếu lượt bị ngắt (quá 10 ms CPU), bài đó không chặn hàng mãi.
  */
-export async function processFullTextQueue(env: Env): Promise<string> {
-  const notes: string[] = [];
-  const { results: need } = await env.DB.prepare(
-    `SELECT i.* FROM items i
-     LEFT JOIN fulltexts f ON f.item_id = i.id
-     WHERE f.item_id IS NULL AND i.dismissed = 0
-       AND (i.kept = 1 OR i.id IN (SELECT item_id FROM daily_picks WHERE day = ?))
-     LIMIT ?`
-  ).bind(vnDay(), FETCH_PER_RUN).all<ItemRow>();
-  for (const it of need) {
-    const r = await ensureFullText(env, it);
-    notes.push(`Toàn văn #${it.id}: ${r?.status ?? '?'}${r?.error ? ` (${r.error})` : ''}`);
-  }
+export async function fetchNextFullText(env: Env): Promise<string> {
+  const since = new Date(Date.now() - 14 * 86400000).toISOString();
+  const it = await env.DB.prepare(
+    `SELECT i.* FROM items i LEFT JOIN fulltexts f ON f.item_id = i.id
+     WHERE f.item_id IS NULL AND i.dismissed = 0 AND i.attempts < 3 AND (i.kept = 1 OR i.published_at >= ?)
+     ORDER BY i.kept DESC, (i.id IN (SELECT item_id FROM daily_picks WHERE day = ?)) DESC, i.published_at DESC
+     LIMIT 1`
+  ).bind(since, vnDay()).first<ItemRow>();
+  if (!it) return '';
+  await env.DB.prepare('UPDATE items SET attempts = attempts + 1 WHERE id = ?').bind(it.id).run();
+  const r = await ensureFullText(env, it);
+  return `Toàn văn #${it.id}: ${r?.status ?? '?'}${r?.error ? ` (${r.error})` : ''}`;
+}
 
-  const { results: queue } = await env.DB.prepare(
-    `SELECT f.item_id FROM fulltexts f JOIN items i ON i.id = f.item_id
-     WHERE f.status IN ('fetched','partial','waiting_quota') AND i.dismissed = 0
-     ORDER BY f.priority DESC,
-              (i.id IN (SELECT item_id FROM daily_picks WHERE day = ?)) DESC,
-              i.kept DESC, f.fetched_at
-     LIMIT 10`
-  ).bind(vnDay()).all<{ item_id: number }>();
-  let budget = CHUNKS_PER_RUN;
-  for (const { item_id } of queue) {
+/** Chỉ dịch những bài anh đã bấm "Dịch bài này" (priority = 1), tối đa `maxChunks` lô mỗi lượt. */
+export async function translateRequested(env: Env, maxChunks: number): Promise<string> {
+  const { results } = await env.DB.prepare(
+    `SELECT item_id FROM fulltexts WHERE priority = 1 AND status IN ('fetched','partial','waiting_quota') ORDER BY translated_at IS NOT NULL, translated_at LIMIT 3`
+  ).all<{ item_id: number }>();
+  const notes: string[] = [];
+  let budget = maxChunks;
+  for (const { item_id } of results) {
     if (budget <= 0) break;
     try {
       const n = await translateItem(env, item_id, budget);
       budget -= n;
       if (n) notes.push(`Dịch #${item_id}: +${n} lô`);
     } catch (e) {
-      if (e instanceof QuotaExhausted) { notes.push('Hết hạn mức dịch miễn phí — chờ hạn mức mới.'); break; }
+      if (e instanceof QuotaExhausted) { notes.push('Hết hạn mức dịch miễn phí — chờ kỳ mới.'); break; }
       throw e;
     }
   }
-  return notes.join('\n') || 'Hàng toàn văn trống';
+  return notes.join('\n');
 }
 
 /** Giữ bài đã giữ mãi mãi; bài không giữ xóa toàn văn sau 6 tháng. */

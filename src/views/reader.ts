@@ -81,12 +81,12 @@ function stateBanner(it: ItemRow, v: FullTextView) {
 
   if (v.translatableCount === 0) return notes;
   if (v.translatedCount === 0) {
-    if (r.status === 'waiting_quota') {
-      notes.push(html`<div class="rd-state warn"><span class="st wait">Bản gốc tiếng Anh</span><span style="flex:1 1 300px">Đã hết hạn mức dịch miễn phí. Toàn văn bên dưới đang là <b>bản gốc tiếng Anh</b>${it.summary_vi ? '; tóm tắt tiếng Việt vẫn có' : ''}.</span>${r.priority
-        ? html`<span class="meta">Đã xếp hàng · tự dịch khi có hạn mức mới</span>`
-        : html`<form method="post" action="/hoc-tap/bai/${it.id}/xep-hang"><button class="btn" type="submit">Xếp hàng dịch</button></form>`}</div>`);
+    if (!r.priority) {
+      notes.push(html`<div class="rd-state"><span class="st" style="background:#F2F4F6;color:#3E4A56">Bản gốc tiếng Anh</span><span class="meta" style="flex:1 1 260px">MyLife chỉ dịch khi anh yêu cầu, để tiết kiệm hạn mức miễn phí.</span><form method="post" action="/hoc-tap/bai/${it.id}/dich"><button class="btn" type="submit">Dịch bài này</button></form></div>`);
+    } else if (r.status === 'waiting_quota') {
+      notes.push(html`<div class="rd-state warn"><span class="st wait">Chờ hạn mức</span><span class="meta" style="flex:1 1 300px">Đã hết hạn mức dịch miễn phí kỳ này. Bài đã xếp hàng, sẽ tự dịch khi có hạn mức mới; trong lúc chờ đọc bản gốc tiếng Anh.</span></div>`);
     } else {
-      notes.push(html`<div class="rd-state"><span class="st wait">Đang dịch…</span><span class="meta">Bản dịch sẽ có sau ít phút — tải lại trang để xem. Trong lúc chờ, phần dưới hiện bản gốc tiếng Anh.</span></div>`);
+      notes.push(html`<div class="rd-state"><span class="st wait">Đang dịch…</span><span class="meta">Mỗi 5 phút dịch thêm một phần — tải lại trang để xem.${r.error ? ` Lỗi lần trước: ${r.error}` : ''}</span></div>`);
     }
     return notes;
   }
@@ -98,15 +98,14 @@ function stateBanner(it: ItemRow, v: FullTextView) {
   } else {
     notes.push(html`<div class="rd-state"><span class="st ai">Bản dịch AI</span><span class="meta">${engines.join(', ')} (gói miễn phí)${r.translated_at ? ` · ${timeAgoVi(r.translated_at)}` : ''} · thuật ngữ giữ tiếng Anh</span></div>`);
   }
-  if (pct < 100) notes.push(html`<div class="meta" style="margin:-.4em 0 1em">Đã dịch ${v.translatedCount}/${v.translatableCount} đoạn (${pct}%) — phần còn lại tạm hiện tiếng Anh (viền xám), sẽ dịch tiếp${r.status === 'waiting_quota' ? ' khi có hạn mức mới' : ''}.</div>`);
+  if (pct < 100 && !r.priority) notes.push(html`<div class="rd-state"><span class="meta" style="flex:1 1 260px">Đã dịch ${v.translatedCount}/${v.translatableCount} đoạn (${pct}%) — phần còn lại đang là tiếng Anh.</span><form method="post" action="/hoc-tap/bai/${it.id}/dich"><button class="btn2" type="submit">Dịch tiếp phần còn lại</button></form></div>`);
+  else if (pct < 100) notes.push(html`<div class="meta" style="margin:-.4em 0 1em">Đã dịch ${v.translatedCount}/${v.translatableCount} đoạn (${pct}%) — phần còn lại tạm hiện tiếng Anh (viền xám), sẽ dịch tiếp${r.status === 'waiting_quota' ? ' khi có hạn mức mới' : ' mỗi 5 phút'}.</div>`);
   return notes;
 }
 
 export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
-  let points: string[] = [];
-  try { points = it.points_vi ? JSON.parse(it.points_vi) : []; } catch { points = []; }
   const heads = v.blocks.map((b, i) => ({ b, i })).filter(({ b, i }) => (b.k === 'h2' || b.k === 'h3') && !isRepeatedTitle(v, i, it.title_en));
-  const title = it.title_vi || it.title_en;
+  const title = it.title_en;
   const langLink = (l: Lang, label: string) => html`<a class="${lang === l ? 'on' : ''}" href="/hoc-tap/bai/${it.id}?lang=${l}">${label}</a>`;
   const isPaper = v.row.kind === 'arxiv_html';
 
@@ -123,16 +122,9 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
       </span>
     </div>
     <div class="kick">${CHANNELS[it.channel].name}${isPaper ? ' · Paper nghiên cứu' : ''} · Điểm ${it.score}</div>
-    <h1 class="t1" style="margin:.35em 0 .25em;font-size:2em">${title}</h1>
-    ${it.title_vi ? html`<div style="font-style:italic;color:#3E4A56" lang="en">${it.title_en}</div>` : ''}
+    <h1 class="t1" style="margin:.35em 0 .25em;font-size:2em" lang="en">${title}</h1>
     <div class="meta" style="margin:.5em 0 1.2em">${it.authors ? `${it.authors} · ` : ''}${it.source_name} · đăng ${timeAgoVi(it.published_at)} · lấy về MyLife ${timeAgoVi(v.row.fetched_at)} · ${Math.max(1, Math.round(v.row.chars_en / 1100))} phút đọc</div>
     ${stateBanner(it, v)}
-    ${it.summary_vi ? html`<div class="box" style="margin-bottom:1.4em;background:var(--tint);border-color:var(--tintb)">
-      <span class="kick">Tóm tắt nhanh do AI viết</span>
-      <p class="sum">${it.summary_vi}</p>
-      ${points.length ? html`<ul style="margin:0;padding-left:1.2em;line-height:1.6">${points.map((x) => html`<li>${x}</li>`)}</ul>` : ''}
-      ${it.why_vi ? html`<div class="why"><b>Vì sao đáng chú ý:</b> ${it.why_vi}</div>` : ''}
-    </div>` : ''}
     <div class="rd-body" id="rd">${v.blocks.length ? bodyHtml(v, lang, it.title_en) : html`<p class="meta">Nguồn không có nội dung để hiển thị.</p>`}</div>
     <div class="box" style="margin-top:1.6em;background:#F4F5F7;border:0;font-size:.9em;line-height:1.6">
       <span><b>Nguồn:</b> ${it.source_name}${it.authors ? ` · ${it.authors}` : ''} · <a href="${v.row.base_url ?? it.url}" target="_blank" rel="noopener" style="color:var(--ac);font-weight:600">Bản gốc ↗</a></span>

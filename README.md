@@ -1,6 +1,6 @@
 # MyLife — V1 (phương án C · Học tập AI)
 
-Trang cá nhân của Sơn tại **mylife.gm-chess.com**. V1 chạy mục tiêu G2 · Học tập AI: tự lấy bài từ arXiv và RSS, tóm tắt tiếng Việt bằng hạn mức AI miễn phí, chọn 5 bài "Đáng đọc" mỗi sáng.
+Trang cá nhân của Sơn tại **mylife.gm-chess.com**. V1 chạy mục tiêu G2 · Học tập AI: tự lấy bài (cả toàn văn) từ arXiv và RSS, chọn 5 bài "Đáng đọc" mỗi sáng, chỉ dịch tiếng Việt khi anh bấm "Dịch bài này".
 
 Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 
@@ -14,6 +14,15 @@ Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 - Tóm tắt tiếng Việt theo chuỗi miễn phí Gemini → Workers AI; tự dừng ở 95% hạn mức; hết thì hiện bản gốc tiếng Anh.
 - Cài lên màn hình chính iPhone (manifest, biểu tượng), chặn công cụ tìm kiếm, chỉ chủ sở hữu vào được.
 
+## Cập nhật 09/11/2026 · chạy vừa gói Workers miễn phí
+
+- **Lý do bản tin không tự cập nhật:** gói miễn phí chỉ cho 50 truy vấn D1, 50 yêu cầu mạng và ~10 ms CPU mỗi lượt chạy. Lượt crawl cũ chạy cả 14 nguồn và 2 truy vấn cho mỗi bài → vượt giới hạn, bị ngắt trước khi kịp ghi nhật ký.
+- **Cách mới:** 1 cron `*/5 * * * *`. Mỗi nhịp: chọn Đáng đọc (sau 06:30) → crawl 1 nguồn đến hạn (RSS 6 giờ, arXiv sau 06:00) và lưu cả nguồn bằng một `db.batch` → dịch tiếp bài anh yêu cầu (2 lô) → lấy 1 toàn văn. Khoảng 25 truy vấn mỗi nhịp.
+- Bộ đọc RSS/Atom viết lại bằng biểu thức chính quy (bỏ fast-xml-parser) để nhẹ CPU.
+- Nhật ký ghi ngay khi bắt đầu nhịp; trang Nguồn & hạn mức báo "Tự động OK" hoặc cảnh báo khi quá 20 phút không chạy.
+- Bỏ tóm tắt AI. Danh sách hiện tiêu đề + đoạn mô tả gốc tiếng Anh.
+- Ảnh đại diện: lấy từ feed (media:thumbnail, media:content, enclosure, `<img>` đầu tiên); arXiv lấy hình đầu tiên trong toàn văn; không có ảnh → ảnh tự vẽ theo tên nguồn và màu kênh (`/thumb/<mã nguồn>.svg`).
+
 ## Đã có ở Chặng 2
 
 - Lấy toàn văn bài về MyLife (bảng `fulltexts`): bỏ menu/quảng cáo/chân trang, giữ tiêu đề, đoạn, danh sách, trích dẫn, hình + chú thích, khối mã.
@@ -21,7 +30,7 @@ Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 - Không vượt tường phí: trang chỉ công khai một phần thì ghi rõ. YouTube: dùng phần mô tả (lời thoại để sau).
 - Dịch toàn văn theo chuỗi miễn phí Gemini → Workers AI → Azure F0 → DeepL Free → Google, từng lô ≤ 3.500 ký tự; dịch dở được lưu và dịch tiếp lượt sau.
 - Trang đọc: Tiếng Việt / English / Song ngữ, A−/A+, mục lục, tiến độ dịch, 3 trạng thái (Bản dịch AI · Bản dịch máy · Bản gốc tiếng Anh khi hết hạn mức), nút Xếp hàng dịch, Dịch lại bằng AI, Thử lấy lại.
-- Hàng đợi (mỗi 30 phút): lấy toàn văn bài Đáng đọc + bài đã giữ, dịch theo thứ tự bài anh mở → Đáng đọc → bài đã giữ. Toàn văn bài không giữ tự xóa sau 6 tháng.
+- Toàn văn tự lấy về (không dịch). Chỉ dịch khi anh bấm "Dịch bài này": 2 lô đầu dịch ngay, phần còn lại dịch tiếp mỗi 5 phút. Toàn văn bài không giữ tự xóa sau 6 tháng.
 
 ### Key dịch máy dự phòng (tuỳ chọn — thiếu key thì bỏ qua dịch vụ đó)
 
@@ -39,7 +48,7 @@ npm run db:local        # tạo CSDL local
 npm run db:seed-dev     # (tuỳ chọn) dữ liệu mẫu
 # Local tự giả lập bản dịch (DEV_FAKE_TRANSLATE=1 trong wrangler.local.toml)
 npm run dev             # mở http://localhost:8787/hoc-tap
-npm test                # kiểm tra bộ đọc feed, chấm điểm, JSON tóm tắt
+npm test                # kiểm tra bộ đọc feed, ảnh đại diện, chấm điểm, tách SQL
 npm run typecheck
 ```
 

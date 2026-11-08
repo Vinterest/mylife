@@ -47,12 +47,17 @@ export async function markExhausted(env: Env, p: Provider): Promise<void> {
 }
 
 export async function quotaSnapshot(env: Env) {
-  const out = [];
-  for (const p of Object.keys(PROVIDERS) as Provider[]) {
+  const keys = Object.keys(PROVIDERS) as Provider[];
+  // Một truy vấn cho cả 6 dịch vụ (giữ số truy vấn D1 mỗi lượt thấp).
+  const cond = keys.map(() => '(provider = ? AND period = ?)').join(' OR ');
+  const { results } = await env.DB.prepare(`SELECT provider, used FROM quota_usage WHERE ${cond}`)
+    .bind(...keys.flatMap((p) => [p, PROVIDERS[p].period()]))
+    .all<{ provider: Provider; used: number }>();
+  const map = Object.fromEntries(results.map((r) => [r.provider, r.used]));
+  return keys.map((p) => {
     const info = PROVIDERS[p];
-    const u = await used(env, p);
+    const u = map[p] ?? 0;
     const lim = info.limit(env);
-    out.push({ provider: p, label: info.label, unit: info.unit, scope: info.scope, used: Math.round(u), limit: lim, pct: Math.min(100, Math.round((u / lim) * 100)) });
-  }
-  return out;
+    return { provider: p, label: info.label, unit: info.unit, scope: info.scope, used: Math.round(u), limit: lim, pct: Math.min(100, Math.round((u / lim) * 100)) };
+  });
 }

@@ -5,18 +5,17 @@ import type { quotaSnapshot } from '../ai/quota';
 
 type Quota = Awaited<ReturnType<typeof quotaSnapshot>>;
 
-const title = (it: ItemRow) => it.title_vi || it.title_en;
+const title = (it: ItemRow) => it.title_en;
 
-function statusBadge(it: ItemRow) {
-  if (it.status === 'summarized') return html`<span class="st ai">Tóm tắt AI</span>`;
-  if (it.status === 'failed') return html`<span class="st err">Lỗi tóm tắt · xem bản gốc</span>`;
-  return html`<span class="st wait">Chờ hạn mức · đang hiện bản gốc</span>`;
+function snippet(it: ItemRow) {
+  const a = (it.abstract_en ?? '').slice(0, 240);
+  return a ? `${a}${(it.abstract_en ?? '').length > 240 ? '…' : ''}` : '';
 }
 
-function summaryText(it: ItemRow) {
-  if (it.summary_vi) return it.summary_vi;
-  const a = (it.abstract_en ?? '').slice(0, 260);
-  return a ? `${a}${(it.abstract_en ?? '').length > 260 ? '…' : ''}` : '';
+/** Ảnh đại diện: thumbnail của nguồn; không có (hoặc ảnh lỗi) → ảnh tự vẽ theo tên nguồn. */
+export function thumb(it: ItemRow, cls = '') {
+  const fallback = `/thumb/${it.source_id}.svg`;
+  return html`<a class="th ${cls}" href="/hoc-tap/bai/${it.id}" tabindex="-1" aria-hidden="true"><img src="${it.image_url || fallback}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${fallback}'"></a>`;
 }
 
 function itemActions(it: ItemRow, back: string) {
@@ -31,29 +30,29 @@ function itemActions(it: ItemRow, back: string) {
 
 function readRow(it: ItemRow, back: string) {
   return html`<article class="rw">
-  <span class="score" aria-label="Điểm đáng đọc">${it.score}</span>
+  ${thumb(it)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
-    <div style="display:flex;gap:.6em;align-items:center;flex-wrap:wrap"><span class="kick">${CHANNELS[it.channel].name}</span>${it.status === 'summarized' ? '' : statusBadge(it)}</div>
-    <a class="t2" href="/hoc-tap/bai/${it.id}">${title(it)}</a>
-    <p class="sum">${summaryText(it)}</p>
+    <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}</span>
+    <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${title(it)}</a>
+    <p class="sum" lang="en">${snippet(it)}</p>
     ${itemActions(it, back)}
   </div>
 </article>`;
 }
 
-function quotaBox(q: Quota, pending: number) {
+function quotaBox(q: Quota) {
   const shown = q.filter((x) => ['gemini', 'workers_ai', 'azure', 'deepl', 'google_tr', 'google_tts'].includes(x.provider));
   return html`<div class="box">
   <span class="kick">Hạn mức dịch miễn phí</span>
   ${shown.map(
     (x) => html`<div class="kv"><span>${x.label} · ${x.scope === 'ngày' ? 'hôm nay' : 'tháng này'}</span><span class="mut">${x.used.toLocaleString('vi-VN')}/${x.limit.toLocaleString('vi-VN')} ${x.unit}</span></div><div class="bar"><i class="${x.pct >= 90 ? 'warn' : ''}" style="width:${x.pct}%"></i></div>`
   )}
-  <span class="meta">Tự dừng ở 95% · hết thì hiện bản gốc tiếng Anh · ${pending} bài đang chờ tóm tắt</span>
+  <span class="meta">Chỉ dịch khi anh bấm “Dịch bài này” · tự dừng ở 95%</span>
   <a class="meta" href="/hoc-tap/han-muc" style="color:var(--ac);font-weight:600">Chi tiết nguồn &amp; hạn mức ›</a>
 </div>`;
 }
 
-export function homePage(p: { picks: ItemRow[]; byChannel: Record<string, ItemRow[]>; quota: Quota; pending: number; weekly: Record<string, number> }) {
+export function homePage(p: { picks: ItemRow[]; byChannel: Record<string, ItemRow[]>; quota: Quota; weekly: Record<string, number> }) {
   const body = html`
 <section class="cols">
   <div class="colmain">
@@ -64,13 +63,13 @@ export function homePage(p: { picks: ItemRow[]; byChannel: Record<string, ItemRo
   </div>
   <aside class="colside">
     <div class="box">
-      <span class="kick">KPI G2.2 · 7 ngày qua</span>
+      <span class="kick">Bài mới · 7 ngày qua</span>
       ${CHANNEL_ORDER.map((c) => {
         const n = p.weekly[c] ?? 0;
-        return html`<div class="kv"><span>${CHANNELS[c].short}</span><span class="mut">${n}/5 bài tóm tắt</span></div><div class="bar"><i style="width:${Math.min(100, n * 20)}%"></i></div>`;
+        return html`<div class="kv"><span>${CHANNELS[c].short}</span><span class="mut">${n} bài</span></div>`;
       })}
     </div>
-    ${quotaBox(p.quota, p.pending)}
+    ${quotaBox(p.quota)}
     <div class="box"><span class="kick">Sắp có</span><span class="meta">Hộp nhặt, Bản tin tuần, Nghe, Sổ tay sẽ mở ở các chặng tiếp theo của V1.</span></div>
   </aside>
 </section>
@@ -79,8 +78,10 @@ export function homePage(p: { picks: ItemRow[]; byChannel: Record<string, ItemRo
     (c) => html`<div>
     <div class="sh"><h2>${CHANNELS[c].short}</h2><a class="more" href="/hoc-tap/kenh/${CHANNELS[c].slug}">Xem tất cả ›</a></div>
     ${(p.byChannel[c] ?? []).length
-      ? (p.byChannel[c] ?? []).map(
-          (it) => html`<div class="li"><a class="t3" href="/hoc-tap/bai/${it.id}">${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div>`
+      ? (p.byChannel[c] ?? []).map((it, i) =>
+          i === 0
+            ? html`<div class="lead">${thumb(it, 'lg')}<a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div>`
+            : html`<div class="lix">${thumb(it, 'sm')}<div><a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div></div>`
         )
       : html`<div class="meta">Chưa có bài.</div>`}
   </div>`
@@ -106,11 +107,14 @@ export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[
   return page({ title: ch.name, tab: 'g2', sub: g2Sub(p.channel), body });
 }
 
-const FT_LABEL: Record<string, string> = { translated: 'Đã dịch xong', partial: 'Dịch dở', fetched: 'Chờ dịch', waiting_quota: 'Chờ hạn mức', abstract_only: 'Chỉ có tóm tắt', fetch_failed: 'Lỗi lấy bài' };
+const FT_LABEL: Record<string, string> = { fetched: 'Đã lấy toàn văn (chưa dịch)', partial: 'Đang dịch dở', translated: 'Đã dịch xong', waiting_quota: 'Chờ hạn mức dịch', abstract_only: 'Chỉ có phần mô tả', fetch_failed: 'Lỗi lấy bài' };
 
-export function quotaPage(p: { quota: Quota; sources: SourceRow[]; jobs: { job: string; started_at: string; ok: number; detail: string }[]; pending: number; hasGemini: boolean; keys: Record<string, boolean>; fulltext: Record<string, number> }) {
+export function quotaPage(p: { quota: Quota; sources: SourceRow[]; jobs: { job: string; started_at: string; ok: number; detail: string }[]; lastTick: string | null; requested: number; keys: Record<string, boolean>; fulltext: Record<string, number> }) {
+  const lateMin = p.lastTick ? (Date.now() - new Date(p.lastTick).getTime()) / 60000 : Infinity;
   const body = html`
-${p.hasGemini ? '' : html`<div class="box" style="background:#FDF6F0;border-color:#F3D6C3"><b>Chưa có GEMINI_API_KEY.</b><span class="meta">Tóm tắt đang chạy bằng Workers AI (nếu còn hạn mức). Thêm key: <code>npx wrangler secret put GEMINI_API_KEY</code></span></div>`}
+${lateMin > 20
+  ? html`<div class="box" style="background:#FDF6F0;border-color:#F3D6C3;margin-bottom:1.2em"><b>Lịch tự động chưa chạy${p.lastTick ? ` (lần cuối ${timeAgoVi(p.lastTick)})` : ''}.</b><span class="meta">Bình thường cứ 5 phút chạy một nhịp. Kiểm tra Cloudflare → Workers &amp; Pages → mylife → Settings → Trigger events: phải có “*/5 * * * *”. Tài khoản miễn phí chỉ có 5 cron cho tất cả Worker — nếu Worker khác đã dùng hết thì xóa bớt.</span></div>`
+  : html`<div class="box" style="margin-bottom:1.2em"><span><span class="st ok">Tự động OK</span> <span class="meta">nhịp gần nhất ${timeAgoVi(p.lastTick!)} · 5 phút/nhịp · mỗi nhịp crawl 1 nguồn đến hạn, lấy 1 toàn văn${p.requested ? ` · đang dịch ${p.requested} bài anh yêu cầu` : ''}</span></span></div>`}
 <section class="cols">
   <div class="colmain">
     <div class="sh"><h2>Hạn mức miễn phí</h2><span class="meta">tự dừng ở 95%</span></div>
@@ -127,13 +131,12 @@ ${p.hasGemini ? '' : html`<div class="box" style="background:#FDF6F0;border-colo
   <aside class="colside">
     <div class="box">
       <span class="kick">Chạy ngay</span>
-      <span class="meta">${p.pending} bài đang chờ tóm tắt</span>
+      <span class="meta">Crawl lại = xếp mọi nguồn vào hàng; mỗi 5 phút chạy 1 nguồn (14 nguồn ≈ 70 phút).</span>
       ${[
-        ['crawl-rss', 'Crawl RSS (mỗi 6 giờ)'],
-        ['crawl-arxiv', 'Crawl arXiv (06:00 hằng ngày)'],
-        ['summarize', 'Tóm tắt 1 lô 8 bài'],
-        ['fulltext', 'Lấy toàn văn + dịch 1 lượt'],
-        ['picks', 'Chọn 5 bài Đáng đọc'],
+        ['tick', 'Chạy 1 nhịp ngay'],
+        ['crawl-rss', 'Crawl lại tất cả RSS'],
+        ['crawl-arxiv', 'Crawl lại arXiv'],
+        ['picks', 'Chọn lại 5 bài Đáng đọc'],
       ].map(([id, label]) => html`<form method="post" action="/admin/run/${id}"><button class="btn2" style="width:100%" type="submit">${label}</button></form>`)}
     </div>
     <div class="box">
@@ -142,15 +145,15 @@ ${p.hasGemini ? '' : html`<div class="box" style="background:#FDF6F0;border-colo
     </div>
     <div class="box">
       <span class="kick">Key dịch vụ</span>
-      ${[['gemini', 'Gemini (GEMINI_API_KEY)'], ['azure', 'Azure (AZURE_TRANSLATOR_KEY)'], ['deepl', 'DeepL (DEEPL_API_KEY)'], ['google', 'Google Dịch (GOOGLE_TRANSLATE_API_KEY)']].map(
+      ${[['gemini', 'Gemini (GEMINI_API_KEY)'], ['workers_ai', 'Workers AI (gắn sẵn, không cần key)'], ['azure', 'Azure (AZURE_TRANSLATOR_KEY)'], ['deepl', 'DeepL (DEEPL_API_KEY)'], ['google', 'Google Dịch (GOOGLE_TRANSLATE_API_KEY)'], ['tts', 'Giọng đọc (GOOGLE_TTS_API_KEY · Chặng 4)']].map(
         ([k, label]) => html`<div class="kv"><span>${label}</span>${p.keys[k] ? html`<span class="st ok">Đã có</span>` : html`<span class="st wait">Chưa có · bỏ qua</span>`}</div>`
       )}
-      <span class="meta">Workers AI dùng sẵn trong Cloudflare, không cần key.</span>
+      <span class="meta">Thứ tự dịch: Gemini → Workers AI → Azure → DeepL → Google. Thiếu key nào thì bỏ qua dịch vụ đó.</span>
     </div>
     <div class="box">
       <span class="kick">Nhật ký gần đây</span>
       ${p.jobs.length
-        ? p.jobs.map((j) => html`<div class="li"><span><span class="st ${j.ok ? 'ok' : 'err'}">${j.job}</span> <span class="meta">${timeAgoVi(j.started_at)}</span></span><span class="meta" style="white-space:pre-line">${j.detail.slice(0, 300)}</span></div>`)
+        ? p.jobs.map((j) => html`<div class="li"><span><span class="st ${j.detail === 'đang chạy…' ? 'wait' : j.ok ? 'ok' : 'err'}">${j.job === 'tick' ? 'nhịp tự động' : j.job}</span> <span class="meta">${timeAgoVi(j.started_at)}</span></span><span class="meta" style="white-space:pre-line">${j.detail.slice(0, 300)}</span></div>`)
         : html`<span class="meta">Chưa có lần chạy nào.</span>`}
     </div>
   </aside>

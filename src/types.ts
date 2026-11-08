@@ -14,6 +14,8 @@ export interface Env {
   AZURE_TRANSLATOR_REGION?: string;
   DEEPL_API_KEY?: string;
   GOOGLE_TRANSLATE_API_KEY?: string;
+  // Chặng 4 · giọng đọc Google Cloud Text-to-Speech
+  GOOGLE_TTS_API_KEY?: string;
   /** Chỉ dùng khi chạy local: giả lập bản dịch. */
   DEV_FAKE_TRANSLATE?: string;
 }
@@ -54,6 +56,7 @@ export interface ItemRow {
   engine: string | null;
   attempts: number;
   read_minutes: number | null;
+  image_url: string | null;
   kept: number;
   dismissed: number;
   source_name?: string;
@@ -67,5 +70,7 @@ export interface RawItem {
   authors?: string;
   published: Date;
   abstract: string;
+  /** Ảnh đại diện lấy từ feed (nếu có). */
+  image?: string;
   isPaper: boolean;
 }

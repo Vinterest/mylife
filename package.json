@@ -14,7 +14,6 @@
     "db:seed-dev": "wrangler d1 execute mylife --local -c wrangler.local.toml --file test/seed-dev.sql"
   },
   "dependencies": {
-    "fast-xml-parser": "^5.12.0",
     "hono": "^4.13.17"
   },
   "devDependencies": {

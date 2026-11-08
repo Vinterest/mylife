@@ -23,18 +23,13 @@ export async function getItem(env: Env, id: number): Promise<ItemRow | null> {
   return env.DB.prepare(`SELECT ${ITEM_COLS} FROM items i JOIN sources s ON s.id = i.source_id WHERE i.id = ?`).bind(id).first<ItemRow>();
 }
 
-/** Số bài đã có tóm tắt tiếng Việt trong 7 ngày qua, theo kênh (KPI G2.2). */
+/** Số bài mới trong 7 ngày qua, theo kênh. */
 export async function weeklyCounts(env: Env): Promise<Record<string, number>> {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const { results } = await env.DB.prepare(
-    `SELECT channel, COUNT(*) AS n FROM items WHERE status = 'summarized' AND published_at >= ? GROUP BY channel`
+    `SELECT channel, COUNT(*) AS n FROM items WHERE dismissed = 0 AND published_at >= ? GROUP BY channel`
   ).bind(since).all<{ channel: string; n: number }>();
   return Object.fromEntries(results.map((r) => [r.channel, r.n]));
-}
-
-export async function pendingCount(env: Env): Promise<number> {
-  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM items WHERE status IN ('new','waiting_quota') AND dismissed = 0`).first<{ n: number }>();
-  return r?.n ?? 0;
 }
 
 export async function allSources(env: Env): Promise<SourceRow[]> {
@@ -45,9 +40,4 @@ export async function allSources(env: Env): Promise<SourceRow[]> {
 export async function recentJobs(env: Env, limit = 12) {
   const { results } = await env.DB.prepare('SELECT * FROM jobs_log ORDER BY id DESC LIMIT ?').bind(limit).all<{ id: number; job: string; started_at: string; ok: number; detail: string }>();
   return results;
-}
-
-export async function logJob(env: Env, job: string, startedAt: string, ok: boolean, detail: string) {
-  await env.DB.prepare('INSERT INTO jobs_log (job, started_at, ok, detail) VALUES (?, ?, ?, ?)').bind(job, startedAt, ok ? 1 : 0, detail.slice(0, 2000)).run();
-  await env.DB.prepare('DELETE FROM jobs_log WHERE id NOT IN (SELECT id FROM jobs_log ORDER BY id DESC LIMIT 200)').run();
 }

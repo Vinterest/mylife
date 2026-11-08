@@ -22,13 +22,11 @@ binding = "AI"
 enabled = true
 
 [triggers]
-# Giờ UTC. Việt Nam = UTC+7.
-crons = [
-  "0 */6 * * *",   # crawl RSS mỗi 6 giờ
-  "0 23 * * *",    # crawl arXiv 06:00 giờ VN
-  "30 23 * * *",   # chọn 5 bài Đáng đọc 06:30 giờ VN
-  "*/30 * * * *"   # tóm tắt tiếng Việt từng lô 8 bài
-]
+# Gói miễn phí giới hạn 5 cron cho CẢ tài khoản và ~10 ms CPU mỗi lượt,
+# nên chỉ dùng 1 cron mỗi 5 phút: mỗi nhịp crawl 1 nguồn đến hạn
+# (RSS mỗi 6 giờ, arXiv sau 06:00 giờ VN), chọn Đáng đọc sau 06:30, lấy toàn văn,
+# và dịch tiếp bài anh đã bấm "Dịch bài này".
+crons = ["*/5 * * * *"]
 
 [vars]
 OWNER_EMAIL = "son.phanhong@gmail.com"
