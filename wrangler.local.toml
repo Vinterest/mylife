@@ -1,0 +1,21 @@
+# Cấu hình CHỈ để chạy thử trên máy (npm run dev): không cần đăng nhập Cloudflare,
+# không có Workers AI, bỏ qua kiểm tra Cloudflare Access. Bản thật dùng wrangler.toml.
+name = "mylife"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mylife"
+database_id = "REPLACE_AFTER_wrangler_d1_create"
+migrations_dir = "migrations"
+
+[vars]
+OWNER_EMAIL = "son.phanhong@gmail.com"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+WORKERS_AI_MODEL = "@cf/google/gemma-3-12b-it"
+GEMINI_DAILY_REQUESTS = "1000"
+WORKERS_AI_DAILY_NEURONS = "10000"
+QUOTA_STOP_RATIO = "0.95"
+DEV_SKIP_AUTH = "1"

@@ -1,0 +1,27 @@
+{
+  "name": "mylife",
+  "version": "1.0.0",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "wrangler dev -c wrangler.local.toml",
+    "db:local": "wrangler d1 migrations apply mylife --local -c wrangler.local.toml",
+    "db:remote": "wrangler d1 migrations apply mylife --remote",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "esbuild test/parse.test.ts --bundle --platform=node --format=esm --outfile=.tmp/test.mjs --log-level=warning && node .tmp/test.mjs",
+    "db:seed-dev": "wrangler d1 execute mylife --local -c wrangler.local.toml --file test/seed-dev.sql"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.12.0",
+    "hono": "^4.13.17"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261108.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.158.0"
+  },
+  "private": true,
+  "type": "module"
+}

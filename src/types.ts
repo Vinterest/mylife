@@ -1,0 +1,64 @@
+export interface Env {
+  DB: D1Database;
+  AI: Ai;
+  OWNER_EMAIL: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL: string;
+  WORKERS_AI_MODEL: string;
+  GEMINI_DAILY_REQUESTS: string;
+  WORKERS_AI_DAILY_NEURONS: string;
+  QUOTA_STOP_RATIO: string;
+  DEV_SKIP_AUTH: string;
+}
+
+export type Channel = 'ai' | 'embodied' | 'robotics' | 'tcnh';
+
+export interface SourceRow {
+  id: string;
+  name: string;
+  kind: 'arxiv' | 'rss';
+  url: string;
+  channel: Channel;
+  weight: number;
+  keywords: string | null;
+  enabled: number;
+  last_run_at: string | null;
+  last_error: string | null;
+  item_count: number;
+}
+
+export interface ItemRow {
+  id: number;
+  source_id: string;
+  channel: Channel;
+  url: string;
+  title_key: string;
+  title_en: string;
+  title_vi: string | null;
+  authors: string | null;
+  published_at: string;
+  fetched_at: string;
+  abstract_en: string | null;
+  summary_vi: string | null;
+  points_vi: string | null;
+  why_vi: string | null;
+  score: number;
+  status: 'new' | 'summarized' | 'waiting_quota' | 'failed';
+  engine: string | null;
+  attempts: number;
+  read_minutes: number | null;
+  kept: number;
+  dismissed: number;
+  source_name?: string;
+  source_weight?: number;
+}
+
+/** Bài vừa lấy từ nguồn, chưa lưu. */
+export interface RawItem {
+  url: string;
+  title: string;
+  authors?: string;
+  published: Date;
+  abstract: string;
+  isPaper: boolean;
+}

@@ -1,0 +1,36 @@
+name = "mylife"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Gắn vào subdomain khi deploy (cần DNS gm-chess.com nằm trên Cloudflare)
+routes = [{ pattern = "mylife.gm-chess.com", custom_domain = true }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mylife"
+database_id = "REPLACE_AFTER_wrangler_d1_create"
+migrations_dir = "migrations"
+
+[ai]
+binding = "AI"
+
+[triggers]
+# Giờ UTC. Việt Nam = UTC+7.
+crons = [
+  "0 */6 * * *",   # crawl RSS mỗi 6 giờ
+  "0 23 * * *",    # crawl arXiv 06:00 giờ VN
+  "30 23 * * *",   # chọn 5 bài Đáng đọc 06:30 giờ VN
+  "*/30 * * * *"   # tóm tắt tiếng Việt từng lô 8 bài
+]
+
+[vars]
+OWNER_EMAIL = "son.phanhong@gmail.com"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+WORKERS_AI_MODEL = "@cf/google/gemma-3-12b-it"
+# Hạn mức miễn phí (chỉnh theo trang của nhà cung cấp khi thay đổi)
+GEMINI_DAILY_REQUESTS = "1000"
+WORKERS_AI_DAILY_NEURONS = "10000"
+QUOTA_STOP_RATIO = "0.95"
+# Đặt "1" khi chạy local để bỏ qua kiểm tra đăng nhập Access
+DEV_SKIP_AUTH = "0"
