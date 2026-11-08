@@ -2,6 +2,8 @@
 import { parseArxiv, parseFeed } from '../src/crawl/parse';
 import { matchesKeywords, normalizeTitle, scoreItem } from '../src/util';
 import { buildPrompt, parseSummary } from '../src/ai/summarize';
+import { splitSql } from '../src/schema';
+import { readFileSync } from 'fs';
 
 let fail = 0;
 const ok = (cond: boolean, msg: string) => { console.log(`${cond ? 'OK  ' : 'FAIL'} ${msg}`); if (!cond) fail++; };
@@ -57,6 +59,10 @@ const s = parseSummary('Đây: {"title_vi":"Tiêu đề","summary_vi":"Tóm tắ
 ok(s.points.length === 3 && s.title_vi === 'Tiêu đề', 'Đọc JSON tóm tắt (có chữ thừa, cắt 3 ý)');
 let threw = false; try { parseSummary('{"summary_vi":"x"}'); } catch { threw = true; }
 ok(threw, 'JSON thiếu khóa → báo lỗi');
+
+const counts = ['0001_init', '0002_sources', '0003_fulltext'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
+ok(counts.join(',') === '8,1,2', `Tách SQL thành câu lệnh (${counts.join(',')})`);
+ok(splitSql('-- a; b\nCREATE TABLE x (a TEXT); -- c;\nINSERT INTO x VALUES (1);').length === 2, 'Tách SQL bỏ dấu ; trong chú thích');
 
 console.log(fail ? `\n${fail} kiểm tra lỗi` : '\nTất cả kiểm tra đạt');
 process.exit(fail ? 1 : 0);

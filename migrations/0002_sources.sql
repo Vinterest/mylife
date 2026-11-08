@@ -1,5 +1,5 @@
 -- Nguồn khởi đầu (đề xuất). Bật/tắt và thêm nguồn trong bảng này.
--- arXiv: url = danh sách chuyên mục; keywords = lọc theo tóm tắt (để trống = lấy cả chuyên mục).
+-- arXiv: url = danh sách chuyên mục, keywords = lọc theo tóm tắt (để trống = lấy cả chuyên mục).
 -- RSS: keywords = chỉ giữ bài có từ khóa trong tiêu đề/mô tả (để trống = lấy hết).
 
 INSERT OR IGNORE INTO sources (id, name, kind, url, channel, weight, keywords) VALUES

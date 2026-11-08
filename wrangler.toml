@@ -40,3 +40,9 @@ QUOTA_STOP_RATIO = "0.95"
 AZURE_TRANSLATOR_REGION = "southeastasia"
 # Đặt "1" khi chạy local để bỏ qua kiểm tra đăng nhập Access
 DEV_SKIP_AUTH = "0"
+
+# Cho phép import các file .sql dạng chữ (Worker tự tạo bảng ở lần chạy đầu)
+[[rules]]
+type = "Text"
+globs = ["**/*.sql"]
+fallthrough = true

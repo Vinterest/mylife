@@ -11,6 +11,11 @@ database_name = "mylife"
 database_id = "16263ebc-5d31-4667-a299-5136888037fb"
 migrations_dir = "migrations"
 
+[[rules]]
+type = "Text"
+globs = ["**/*.sql"]
+fallthrough = true
+
 [vars]
 OWNER_EMAIL = "son.phanhong@gmail.com"
 GEMINI_MODEL = "gemini-2.5-flash-lite"

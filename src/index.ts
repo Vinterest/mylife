@@ -11,6 +11,7 @@ import { READER_CSS, readerPage, type Lang } from './views/reader';
 import { cleanupFullTexts, ensureFullText, processFullTextQueue, translateItem, viewOf } from './fulltext';
 import { APPLE_TOUCH_PNG_B64 } from './icon-png';
 import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
+import { ensureSchema } from './schema';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -49,11 +50,12 @@ app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 /* ---------- Bảo vệ: chỉ chủ sở hữu (qua Cloudflare Access) ---------- */
 app.use('*', async (c, next) => {
   c.header('X-Robots-Tag', 'noindex, nofollow');
-  if (c.env.DEV_SKIP_AUTH === '1') return next();
+  if (c.env.DEV_SKIP_AUTH === '1') { await ensureSchema(c.env); return next(); }
   const email = c.req.header('Cf-Access-Authenticated-User-Email');
   if (!email || email.toLowerCase() !== c.env.OWNER_EMAIL.toLowerCase()) {
     return c.text('Không có quyền truy cập. Trang này chỉ dành cho chủ sở hữu (qua Cloudflare Access).', 403);
   }
+  await ensureSchema(c.env);
   return next();
 });
 
@@ -197,6 +199,6 @@ export default {
   fetch: app.fetch,
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     const job = CRON_TO_JOB[event.cron];
-    if (job) ctx.waitUntil(runJob(env, job));
+    if (job) ctx.waitUntil(ensureSchema(env).then(() => runJob(env, job)));
   },
 } satisfies ExportedHandler<Env>;

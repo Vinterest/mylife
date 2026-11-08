@@ -10,7 +10,7 @@
     "db:remote": "wrangler d1 migrations apply mylife --remote",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild test/parse.test.ts --bundle --platform=node --format=esm --outfile=.tmp/test.mjs --log-level=warning && node .tmp/test.mjs",
+    "test": "esbuild test/parse.test.ts --bundle --platform=node --format=esm --outfile=.tmp/test.mjs --log-level=warning --loader:.sql=text && node .tmp/test.mjs",
     "db:seed-dev": "wrangler d1 execute mylife --local -c wrangler.local.toml --file test/seed-dev.sql"
   },
   "dependencies": {
