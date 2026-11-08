@@ -15,6 +15,10 @@ migrations_dir = "migrations"
 [ai]
 binding = "AI"
 
+# Nhật ký lỗi xem được trong Cloudflare → Workers → mylife → Observability / Logs
+[observability]
+enabled = true
+
 [triggers]
 # Giờ UTC. Việt Nam = UTC+7.
 crons = [

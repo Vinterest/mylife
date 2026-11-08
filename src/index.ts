@@ -139,6 +139,29 @@ app.post('/admin/run/:job', async (c) => {
 
 app.notFound((c) => c.text('Không tìm thấy trang', 404));
 
+/** Trang lỗi dễ hiểu (chỉ chủ sở hữu thấy, vì site nằm sau Cloudflare Access). */
+app.onError((err, c) => {
+  console.error('MyLife error:', err);
+  const msg = err instanceof Error ? err.message : String(err);
+  let hint = 'Chụp màn hình trang này gửi Claude để sửa.';
+  if (/no such table/i.test(msg)) {
+    hint = 'Các bảng dữ liệu trong D1 chưa được tạo. Cách sửa: Cloudflare → Storage & databases → D1 → mylife → Console, lần lượt dán và chạy nội dung 3 file migrations/0001_init.sql, 0002_sources.sql, 0003_fulltext.sql (trên GitHub repo mylife), rồi tải lại trang.';
+  } else if (/D1|binding|DB/i.test(msg) && !c.env?.DB) {
+    hint = 'Worker chưa được gắn cơ sở dữ liệu D1 (binding DB). Kiểm tra database_id trong wrangler.toml và deploy lại.';
+  }
+  const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]!));
+  return c.html(
+    `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lỗi · MyLife</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;line-height:1.6;color:#14202B">
+<h1 style="font-size:22px">MyLife gặp lỗi</h1>
+<p><b>Cách xử lý:</b> ${esc(hint)}</p>
+<p style="background:#F4F5F7;padding:12px;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap;word-break:break-word">${esc(msg)}</p>
+<p style="color:#56626E;font-size:13px">Đường dẫn: ${esc(new URL(c.req.url).pathname)}</p>
+</body></html>`,
+    500
+  );
+});
+
 /* ---------- Việc chạy nền ---------- */
 const JOBS: Record<string, (env: Env) => Promise<string>> = {
   'crawl-rss': async (env) => {
