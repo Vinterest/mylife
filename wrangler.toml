@@ -2,6 +2,8 @@ name = "mylife"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
+# Giữ các biến anh thêm trên trang Cloudflare khi deploy từ GitHub (không bị ghi đè)
+keep_vars = true
 
 # Gắn vào subdomain khi deploy (cần DNS gm-chess.com nằm trên Cloudflare)
 routes = [{ pattern = "mylife.gm-chess.com", custom_domain = true }]
