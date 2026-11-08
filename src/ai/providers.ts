@@ -4,7 +4,7 @@ import { addUsage, canUse, markExhausted } from './quota';
 export class QuotaExhausted extends Error {}
 
 /** Gemini qua Google AI Studio (gói miễn phí). Trả về chuỗi JSON. */
-export async function geminiJson(env: Env, prompt: string): Promise<string> {
+export async function geminiJson(env: Env, prompt: string, maxOutputTokens = 1200): Promise<string> {
   if (!env.GEMINI_API_KEY) throw new QuotaExhausted('Chưa có GEMINI_API_KEY');
   if (!(await canUse(env, 'gemini'))) throw new QuotaExhausted('Gemini đã gần hết hạn mức hôm nay');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent`;
@@ -13,7 +13,7 @@ export async function geminiJson(env: Env, prompt: string): Promise<string> {
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 1200 },
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens },
     }),
   });
   await addUsage(env, 'gemini', 1);
@@ -36,19 +36,19 @@ const NEURON_RATES: Record<string, { in: number; out: number }> = {
 };
 
 /** Cloudflare Workers AI (10.000 neuron miễn phí mỗi ngày). */
-export async function workersAiJson(env: Env, prompt: string): Promise<string> {
+export async function workersAiJson(env: Env, prompt: string, maxTokens = 900): Promise<string> {
   if (!env.AI) throw new QuotaExhausted('Workers AI không khả dụng (chạy local)');
   const model = env.WORKERS_AI_MODEL;
   const rate = NEURON_RATES[model] ?? { in: 31371, out: 50560 };
   const estPromptTokens = Math.ceil(prompt.length / 3.5);
-  const estNeurons = (estPromptTokens * rate.in + 900 * rate.out) / 1e6;
+  const estNeurons = (estPromptTokens * rate.in + maxTokens * rate.out) / 1e6;
   if (!(await canUse(env, 'workers_ai', estNeurons))) throw new QuotaExhausted('Workers AI đã gần hết hạn mức hôm nay');
   const out: any = await env.AI.run(model as any, {
     messages: [
       { role: 'system', content: 'Chỉ trả về một đối tượng JSON hợp lệ, không thêm chữ nào khác.' },
       { role: 'user', content: prompt },
     ],
-    max_tokens: 900,
+    max_tokens: maxTokens,
     temperature: 0.3,
   } as any);
   const usage = out?.usage;

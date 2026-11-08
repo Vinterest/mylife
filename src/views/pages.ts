@@ -22,7 +22,7 @@ function summaryText(it: ItemRow) {
 function itemActions(it: ItemRow, back: string) {
   return html`<div class="acts">
   <span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}${it.read_minutes ? ` · ${it.read_minutes} phút` : ''}</span>
-  <a href="/hoc-tap/bai/${it.id}">Đọc</a>
+  <a href="/hoc-tap/bai/${it.id}">Đọc toàn văn</a>
   <a href="${it.url}" target="_blank" rel="noopener">Bài gốc ↗</a>
   <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${it.kept ? 'Đã giữ ✓' : 'Giữ'}</button></form>
   <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/bo"><input type="hidden" name="back" value="${back}"><button class="l mut" type="submit" style="color:var(--mut)">Không quan tâm</button></form>
@@ -106,40 +106,9 @@ export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[
   return page({ title: ch.name, tab: 'g2', sub: g2Sub(p.channel), body });
 }
 
-export function itemPage(it: ItemRow) {
-  let points: string[] = [];
-  try { points = it.points_vi ? JSON.parse(it.points_vi) : []; } catch { points = []; }
-  const body = html`
-<section class="cols">
-  <article class="colmain" style="max-width:780px">
-    <div class="meta"><a href="/hoc-tap">Học tập AI</a> › <a href="/hoc-tap/kenh/${CHANNELS[it.channel].slug}">${CHANNELS[it.channel].short}</a></div>
-    <div style="display:flex;gap:.6em;align-items:center;flex-wrap:wrap;margin-top:.8em"><span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}</span>${statusBadge(it)}</div>
-    <h1 class="t1" style="margin-top:.35em">${title(it)}</h1>
-    ${it.title_vi ? html`<div style="font-style:italic;color:#3E4A56;margin-top:.3em">${it.title_en}</div>` : ''}
-    <div class="meta" style="margin-top:.5em">${it.authors ? `${it.authors} · ` : ''}${it.source_name} · đăng ${timeAgoVi(it.published_at)}${it.engine ? ` · tóm tắt bằng ${it.engine === 'gemini' ? 'Gemini' : 'Workers AI'}` : ''}</div>
-    ${it.summary_vi
-      ? html`<div class="box" style="margin:1.2em 0;background:var(--tint);border-color:var(--tintb)">
-      <span class="kick">Tóm tắt nhanh do AI viết</span>
-      <p class="sum" style="font-size:1.05em">${it.summary_vi}</p>
-      ${points.length ? html`<ul style="margin:0;padding-left:1.2em;line-height:1.6">${points.map((x) => html`<li>${x}</li>`)}</ul>` : ''}
-      ${it.why_vi ? html`<div class="why"><b>Vì sao đáng chú ý:</b> ${it.why_vi}</div>` : ''}
-    </div>`
-      : html`<div class="box" style="margin:1.2em 0;background:#FDF6F0;border-color:#F3D6C3"><span class="st wait" style="align-self:flex-start">Chờ hạn mức dịch</span><span>Bài chưa có tóm tắt tiếng Việt (hết hạn mức miễn phí hoặc đang xếp hàng). Phần dưới là mô tả gốc tiếng Anh.</span></div>`}
-    <div class="sh" style="margin-top:1.4em"><h2>Mô tả gốc (tiếng Anh)</h2></div>
-    <p class="sum" style="font-size:1.05em;line-height:1.7">${it.abstract_en || 'Nguồn không cung cấp mô tả.'}</p>
-    <div class="box" style="margin-top:1.4em;background:#F4F5F7;border:0">
-      <span class="meta"><b>Toàn văn &amp; bản dịch toàn văn</b> sẽ có ở Chặng 2 (lấy toàn văn về MyLife). Hiện tại: <a href="${it.url}" target="_blank" rel="noopener" style="color:var(--ac);font-weight:600">mở bài gốc ↗</a></span>
-    </div>
-    <div class="acts" style="margin-top:1.2em">
-      <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="/hoc-tap/bai/${it.id}"><button class="btn" type="submit">${it.kept ? 'Đã giữ ✓' : 'Giữ bài này'}</button></form>
-      <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/bo"><input type="hidden" name="back" value="/hoc-tap"><button class="btn2" type="submit">Không quan tâm</button></form>
-    </div>
-  </article>
-</section>`;
-  return page({ title: title(it), tab: 'g2', sub: g2Sub(it.channel), body });
-}
+const FT_LABEL: Record<string, string> = { translated: 'Đã dịch xong', partial: 'Dịch dở', fetched: 'Chờ dịch', waiting_quota: 'Chờ hạn mức', abstract_only: 'Chỉ có tóm tắt', fetch_failed: 'Lỗi lấy bài' };
 
-export function quotaPage(p: { quota: Quota; sources: SourceRow[]; jobs: { job: string; started_at: string; ok: number; detail: string }[]; pending: number; hasGemini: boolean }) {
+export function quotaPage(p: { quota: Quota; sources: SourceRow[]; jobs: { job: string; started_at: string; ok: number; detail: string }[]; pending: number; hasGemini: boolean; keys: Record<string, boolean>; fulltext: Record<string, number> }) {
   const body = html`
 ${p.hasGemini ? '' : html`<div class="box" style="background:#FDF6F0;border-color:#F3D6C3"><b>Chưa có GEMINI_API_KEY.</b><span class="meta">Tóm tắt đang chạy bằng Workers AI (nếu còn hạn mức). Thêm key: <code>npx wrangler secret put GEMINI_API_KEY</code></span></div>`}
 <section class="cols">
@@ -163,8 +132,20 @@ ${p.hasGemini ? '' : html`<div class="box" style="background:#FDF6F0;border-colo
         ['crawl-rss', 'Crawl RSS (mỗi 6 giờ)'],
         ['crawl-arxiv', 'Crawl arXiv (06:00 hằng ngày)'],
         ['summarize', 'Tóm tắt 1 lô 8 bài'],
+        ['fulltext', 'Lấy toàn văn + dịch 1 lượt'],
         ['picks', 'Chọn 5 bài Đáng đọc'],
       ].map(([id, label]) => html`<form method="post" action="/admin/run/${id}"><button class="btn2" style="width:100%" type="submit">${label}</button></form>`)}
+    </div>
+    <div class="box">
+      <span class="kick">Toàn văn</span>
+      ${Object.keys(FT_LABEL).map((k) => html`<div class="kv"><span>${FT_LABEL[k]}</span><span class="mut">${p.fulltext[k] ?? 0}</span></div>`)}
+    </div>
+    <div class="box">
+      <span class="kick">Key dịch vụ</span>
+      ${[['gemini', 'Gemini (GEMINI_API_KEY)'], ['azure', 'Azure (AZURE_TRANSLATOR_KEY)'], ['deepl', 'DeepL (DEEPL_API_KEY)'], ['google', 'Google Dịch (GOOGLE_TRANSLATE_API_KEY)']].map(
+        ([k, label]) => html`<div class="kv"><span>${label}</span>${p.keys[k] ? html`<span class="st ok">Đã có</span>` : html`<span class="st wait">Chưa có · bỏ qua</span>`}</div>`
+      )}
+      <span class="meta">Workers AI dùng sẵn trong Cloudflare, không cần key.</span>
     </div>
     <div class="box">
       <span class="kick">Nhật ký gần đây</span>

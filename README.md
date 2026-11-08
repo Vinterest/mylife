@@ -14,12 +14,30 @@ Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 - Tóm tắt tiếng Việt theo chuỗi miễn phí Gemini → Workers AI; tự dừng ở 95% hạn mức; hết thì hiện bản gốc tiếng Anh.
 - Cài lên màn hình chính iPhone (manifest, biểu tượng), chặn công cụ tìm kiếm, chỉ chủ sở hữu vào được.
 
+## Đã có ở Chặng 2
+
+- Lấy toàn văn bài về MyLife (bảng `fulltexts`): bỏ menu/quảng cáo/chân trang, giữ tiêu đề, đoạn, danh sách, trích dẫn, hình + chú thích, khối mã.
+- arXiv: đọc bản HTML của paper, công thức chuyển thành `$...$` và hiển thị bằng KaTeX, bỏ danh mục tài liệu tham khảo. Paper chưa có bản HTML → chỉ có tóm tắt.
+- Không vượt tường phí: trang chỉ công khai một phần thì ghi rõ. YouTube: dùng phần mô tả (lời thoại để sau).
+- Dịch toàn văn theo chuỗi miễn phí Gemini → Workers AI → Azure F0 → DeepL Free → Google, từng lô ≤ 3.500 ký tự; dịch dở được lưu và dịch tiếp lượt sau.
+- Trang đọc: Tiếng Việt / English / Song ngữ, A−/A+, mục lục, tiến độ dịch, 3 trạng thái (Bản dịch AI · Bản dịch máy · Bản gốc tiếng Anh khi hết hạn mức), nút Xếp hàng dịch, Dịch lại bằng AI, Thử lấy lại.
+- Hàng đợi (mỗi 30 phút): lấy toàn văn bài Đáng đọc + bài đã giữ, dịch theo thứ tự bài anh mở → Đáng đọc → bài đã giữ. Toàn văn bài không giữ tự xóa sau 6 tháng.
+
+### Key dịch máy dự phòng (tuỳ chọn — thiếu key thì bỏ qua dịch vụ đó)
+
+Thêm trong Cloudflare → Workers → mylife → Settings → Variables and Secrets (loại Secret):
+
+- `AZURE_TRANSLATOR_KEY` (gói F0); sửa `AZURE_TRANSLATOR_REGION` trong `wrangler.toml` nếu tạo ở vùng khác `southeastasia`.
+- `DEEPL_API_KEY` (DeepL API Free).
+- `GOOGLE_TRANSLATE_API_KEY` (Cloud Translation; đặt ngân sách 0 USD + cảnh báo).
+
 ## Chạy thử trên máy
 
 ```bash
 npm install
 npm run db:local        # tạo CSDL local
 npm run db:seed-dev     # (tuỳ chọn) dữ liệu mẫu
+# Local tự giả lập bản dịch (DEV_FAKE_TRANSLATE=1 trong wrangler.local.toml)
 npm run dev             # mở http://localhost:8787/hoc-tap
 npm test                # kiểm tra bộ đọc feed, chấm điểm, JSON tóm tắt
 npm run typecheck

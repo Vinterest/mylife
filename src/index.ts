@@ -5,8 +5,10 @@ import { summarizeBatch } from './ai/summarize';
 import { quotaSnapshot } from './ai/quota';
 import { makePicks } from './picks';
 import { allSources, getItem, latestByChannel, logJob, pendingCount, picksForToday, recentJobs, weeklyCounts } from './db';
-import { channelPage, homePage, itemPage, quotaPage, soonPage } from './views/pages';
+import { channelPage, homePage, quotaPage, soonPage } from './views/pages';
 import { CSS } from './views/layout';
+import { READER_CSS, readerPage, type Lang } from './views/reader';
+import { cleanupFullTexts, ensureFullText, processFullTextQueue, translateItem, viewOf } from './fulltext';
 import { APPLE_TOUCH_PNG_B64 } from './icon-png';
 import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
 
@@ -15,7 +17,7 @@ const app = new Hono<{ Bindings: Env }>();
 /* ---------- Tài nguyên tĩnh (không cần đăng nhập để iPhone tải được biểu tượng) ---------- */
 const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0077B6"/><text x="32" y="44" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" fill="#fff" text-anchor="middle">M</text></svg>`;
 
-app.get('/app.css', (c) => c.body(CSS, 200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }));
+app.get('/app.css', (c) => c.body(CSS + READER_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }));
 app.get('/icon.svg', (c) => c.body(ICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }));
 app.get('/apple-touch-icon.png', (c) => {
   const bin = Uint8Array.from(atob(APPLE_TOUCH_PNG_B64), (ch) => ch.charCodeAt(0));
@@ -88,7 +90,25 @@ app.get('/hoc-tap/kenh/:slug', async (c) => {
 app.get('/hoc-tap/bai/:id', async (c) => {
   const it = await getItem(c.env, Number(c.req.param('id')));
   if (!it) return c.notFound();
-  return c.html(itemPage(it));
+  // Anh mở bài → lấy toàn văn ngay (ưu tiên), dịch tiếp trong nền.
+  const ft = await ensureFullText(c.env, it, 1);
+  if (!ft) return c.text('Không đọc được toàn văn', 500);
+  if (['fetched', 'partial', 'waiting_quota'].includes(ft.status)) {
+    c.executionCtx.waitUntil(translateItem(c.env, it.id, 4).catch(() => 0));
+  }
+  const q = c.req.query('lang');
+  const lang: Lang = q === 'en' || q === 'bi' ? q : 'vi';
+  return c.html(readerPage(it, viewOf(ft), lang));
+});
+
+app.post('/hoc-tap/bai/:id/:action{xep-hang|dich-ai|lay-lai}', async (c) => {
+  if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
+  const id = Number(c.req.param('id'));
+  const action = c.req.param('action');
+  if (action === 'xep-hang') await c.env.DB.prepare('UPDATE fulltexts SET priority = 1 WHERE item_id = ?').bind(id).run();
+  if (action === 'dich-ai') await c.env.DB.prepare(`UPDATE fulltexts SET want_ai = 1, priority = 1, status = CASE WHEN status = 'translated' THEN 'partial' ELSE status END WHERE item_id = ?`).bind(id).run();
+  if (action === 'lay-lai') await c.env.DB.prepare(`DELETE FROM fulltexts WHERE item_id = ? AND status = 'fetch_failed'`).bind(id).run();
+  return c.redirect(`/hoc-tap/bai/${id}`, 303);
 });
 
 app.post('/hoc-tap/bai/:id/:action{giu|bo}', async (c) => {
@@ -101,9 +121,11 @@ app.post('/hoc-tap/bai/:id/:action{giu|bo}', async (c) => {
   return c.redirect(back.startsWith('/') ? back : '/hoc-tap', 303);
 });
 
-app.get('/hoc-tap/han-muc', async (c) =>
-  c.html(quotaPage({ quota: await quotaSnapshot(c.env), sources: await allSources(c.env), jobs: await recentJobs(c.env), pending: await pendingCount(c.env), hasGemini: !!c.env.GEMINI_API_KEY }))
-);
+app.get('/hoc-tap/han-muc', async (c) => {
+  const { results: ft } = await c.env.DB.prepare('SELECT status, COUNT(*) AS n FROM fulltexts GROUP BY status').all<{ status: string; n: number }>();
+  const keys = { gemini: !!c.env.GEMINI_API_KEY, azure: !!c.env.AZURE_TRANSLATOR_KEY, deepl: !!c.env.DEEPL_API_KEY, google: !!c.env.GOOGLE_TRANSLATE_API_KEY };
+  return c.html(quotaPage({ quota: await quotaSnapshot(c.env), sources: await allSources(c.env), jobs: await recentJobs(c.env), pending: await pendingCount(c.env), hasGemini: keys.gemini, keys, fulltext: Object.fromEntries(ft.map((r) => [r.status, r.n])) }));
+});
 
 app.get('/sap-co/:key', (c) => c.html(soonPage(c.req.param('key'))));
 
@@ -127,8 +149,9 @@ const JOBS: Record<string, (env: Env) => Promise<string>> = {
     const out = await crawl(env, 'arxiv');
     return `${out}\n${await summarizeBatch(env)}`;
   },
-  summarize: (env) => summarizeBatch(env),
-  picks: async (env) => `${await summarizeBatch(env)}\n${await makePicks(env, vnDay())}`,
+  summarize: async (env) => `${await summarizeBatch(env)}\n${await processFullTextQueue(env)}`,
+  fulltext: (env) => processFullTextQueue(env),
+  picks: async (env) => `${await summarizeBatch(env)}\n${await makePicks(env, vnDay())}\n${await cleanupFullTexts(env)}`,
 };
 
 async function runJob(env: Env, job: string): Promise<void> {

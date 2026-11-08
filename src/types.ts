@@ -9,6 +9,13 @@ export interface Env {
   WORKERS_AI_DAILY_NEURONS: string;
   QUOTA_STOP_RATIO: string;
   DEV_SKIP_AUTH: string;
+  // Chặng 2 · dịch máy dự phòng (để trống = bỏ qua dịch vụ đó)
+  AZURE_TRANSLATOR_KEY?: string;
+  AZURE_TRANSLATOR_REGION?: string;
+  DEEPL_API_KEY?: string;
+  GOOGLE_TRANSLATE_API_KEY?: string;
+  /** Chỉ dùng khi chạy local: giả lập bản dịch. */
+  DEV_FAKE_TRANSLATE?: string;
 }
 
 export type Channel = 'ai' | 'embodied' | 'robotics' | 'tcnh';
