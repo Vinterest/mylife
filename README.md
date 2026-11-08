@@ -48,7 +48,7 @@ npm run typecheck
 Yêu cầu: tên miền gm-chess.com đã dùng DNS của Cloudflare.
 
 1. Đăng nhập: `npx wrangler login`
-2. Tạo CSDL: `npx wrangler d1 create mylife` → chép `database_id` vào `wrangler.toml` (và `wrangler.local.toml`).
+2. CSDL D1 `mylife` đã tạo (ID `16263ebc-5d31-4667-a299-5136888037fb`, đã điền trong `wrangler.toml`).
 3. Tạo bảng và nguồn: `npm run db:remote`
 4. Thêm key Gemini (gõ vào khi được hỏi, không dán vào đâu khác):
    `npx wrangler secret put GEMINI_API_KEY`

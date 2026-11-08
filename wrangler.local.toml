@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "mylife"
-database_id = "REPLACE_AFTER_wrangler_d1_create"
+database_id = "16263ebc-5d31-4667-a299-5136888037fb"
 migrations_dir = "migrations"
 
 [vars]
