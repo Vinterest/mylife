@@ -179,11 +179,15 @@ export async function translateRequested(env: Env, maxChunks: number): Promise<s
   return notes.join('\n');
 }
 
-/** Giữ bài đã giữ mãi mãi; bài không giữ xóa toàn văn sau 6 tháng. */
+/**
+ * Bài trong Sổ tay (bài đã "Lưu Sổ tay", hoặc bài tạo từ mục nhặt đã "Lưu Sổ tay") giữ toàn văn + bản dịch vĩnh viễn;
+ * bài khác xóa toàn văn + bản dịch sau 6 tháng (tiêu đề, mô tả, link vẫn còn).
+ */
 export async function cleanupFullTexts(env: Env): Promise<string> {
   const cutoff = new Date(Date.now() - 182 * 86400000).toISOString();
   const r = await env.DB.prepare(
-    `DELETE FROM fulltexts WHERE fetched_at < ? AND item_id IN (SELECT id FROM items WHERE kept = 0)`
+    `DELETE FROM fulltexts WHERE fetched_at < ? AND item_id IN (SELECT id FROM items WHERE kept = 0)
+       AND item_id NOT IN (SELECT item_id FROM captures WHERE kept = 1 AND item_id IS NOT NULL)`
   ).bind(cutoff).run();
   return `Dọn toàn văn cũ: ${r.meta.changes ?? 0}`;
 }

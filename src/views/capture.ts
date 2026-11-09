@@ -200,8 +200,8 @@ export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[] }) {
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>Sổ tay · ${entries.length} mục</h2><span class="meta">mục nhặt đã “Lưu Sổ tay” + bài đã bấm “Giữ”</span></div>
-    ${entries.length ? entries.map((e) => e.html) : html`<div class="empty">Sổ tay trống. Bấm “Lưu Sổ tay” ở mục nhặt hoặc “Giữ” ở bài báo để lưu lâu dài kèm ghi chú.</div>`}
+    <div class="sh"><h2>Sổ tay · ${entries.length} mục</h2><span class="meta">mục nhặt và bài đã bấm “Lưu Sổ tay” · lưu vĩnh viễn</span></div>
+    ${entries.length ? entries.map((e) => e.html) : html`<div class="empty">Sổ tay trống. Bấm “Lưu Sổ tay” ở bài báo hoặc mục nhặt để lưu vĩnh viễn.</div>`}
   </div>
 </section>`;
   return page({ title: 'Sổ tay', tab: 'g2', sub: g2Sub('notes'), body });

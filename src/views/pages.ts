@@ -35,7 +35,7 @@ function itemActions(it: ItemRow, back: string) {
   <span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}${it.read_minutes ? ` · ${it.read_minutes} phút` : ''}</span>
   <a href="${it.url}" target="_blank" rel="noopener">Bài gốc ↗</a>
   <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/da-doc"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${it.read_at ? '↩ Chưa đọc' : '✓ Đã đọc'}</button></form>
-  <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${it.kept ? 'Đã giữ ✓' : 'Giữ'}</button></form>
+  <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${it.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu Sổ tay'}</button></form>
   <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/bo"><input type="hidden" name="back" value="${back}"><button class="l mut" type="submit" style="color:var(--mut)">Không quan tâm</button></form>
 </div>`;
 }

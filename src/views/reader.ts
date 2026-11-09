@@ -138,7 +138,7 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
       ${raw(speakButton())}
       <span style="margin-left:auto;display:flex;gap:.5em">
         <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/da-doc"><input type="hidden" name="back" value="${it.read_at ? `/hoc-tap/bai/${it.id}?lang=${lang}` : '/hoc-tap'}"><button class="${it.read_at ? 'btn2' : 'btn'}" type="submit">${it.read_at ? '↩ Chưa đọc' : '✓ Đã đọc'}</button></form>
-        <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="/hoc-tap/bai/${it.id}?lang=${lang}"><button class="btn2" type="submit">${it.kept ? 'Đã giữ ✓' : 'Giữ bài'}</button></form>
+        <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="/hoc-tap/bai/${it.id}?lang=${lang}"><button class="btn2" type="submit">${it.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu Sổ tay'}</button></form>
       </span>
     </div>
     <div class="kick">${CHANNELS[it.channel].name}${isPaper ? ' · Paper nghiên cứu' : ''} · Điểm ${it.score}</div>

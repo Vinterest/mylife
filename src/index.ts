@@ -104,7 +104,7 @@ app.use('/hoc-tap*', async (c, next) => {
   const cnt: Record<string, number> = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.total - r.readN)]));
   const inbox = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures').first<{ n: number }>().catch(() => null);
   cnt.inbox = inbox?.n ?? 0;
-  // Sổ tay = mục nhặt đã lưu + bài đã Giữ (không tính bài tạo từ Hộp nhặt, vì đã tính ở mục nhặt) — giống trang Sổ tay.
+  // Sổ tay = mục nhặt đã lưu + bài đã Lưu Sổ tay (không tính bài tạo từ Hộp nhặt, vì đã tính ở mục nhặt) — giống trang Sổ tay.
   const notes = await c.env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM captures WHERE kept = 1) + (SELECT COUNT(*) FROM items WHERE kept = 1 AND source_id <> 'manual') AS n`
   ).first<{ n: number }>().catch(() => null);
@@ -321,7 +321,7 @@ app.post('/hoc-tap/bai/:id{[0-9]+}/ghi-chu', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
   const id = Number(c.req.param('id'));
   const note = String((await c.req.parseBody()).note ?? '').trim().slice(0, 5000) || null;
-  // Có ghi chú thì tự "Giữ" bài để bài vào Sổ tay.
+  // Có ghi chú thì tự đưa bài vào Sổ tay.
   await c.env.DB.prepare('UPDATE items SET note = ?, kept = CASE WHEN ? IS NOT NULL THEN 1 ELSE kept END WHERE id = ?').bind(note, note, id).run();
   return c.redirect(`/hoc-tap/bai/${id}`, 303);
 });
