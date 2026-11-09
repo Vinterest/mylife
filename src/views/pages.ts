@@ -26,7 +26,7 @@ function snippet(it: ItemRow) {
 
 /** Ảnh đại diện: thumbnail của nguồn; không có (hoặc ảnh lỗi) → ảnh tự vẽ theo tên nguồn. */
 export function thumb(it: ItemRow, cls = '') {
-  const fallback = `/thumb/${it.source_id}.svg`;
+  const fallback = `/thumb/${it.source_id}.svg${it.source_id === 'manual' ? `?ch=${it.channel}` : ''}`;
   return html`<a class="th ${cls}" href="/hoc-tap/bai/${it.id}" tabindex="-1" aria-hidden="true"><img src="${it.image_url || fallback}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${fallback}'"></a>`;
 }
 

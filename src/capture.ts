@@ -193,6 +193,20 @@ export function defaultTitle(note: string | null | undefined, createdAt: string,
   return `${nImg ? 'Ảnh nhặt' : 'Mục nhặt'} ${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 
+/**
+ * Bài (items) tạo từ mục nhặt hiển thị GIỐNG mục nhặt ở mọi danh sách: cùng tiêu đề, đoạn nội dung anh dán,
+ * và ảnh chụp đầu tiên anh gửi làm ảnh đại diện (nếu có).
+ */
+export async function syncItem(env: Env, captureId: number): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE items SET
+       title_en = COALESCE((SELECT title FROM captures WHERE id = ?1), title_en),
+       abstract_en = COALESCE((SELECT note FROM captures WHERE id = ?1), abstract_en),
+       image_url = COALESCE((SELECT '/hoc-tap/anh/' || MIN(id) FROM capture_images WHERE capture_id = ?1 HAVING COUNT(*) > 0), image_url)
+     WHERE source_id = 'manual' AND id = (SELECT item_id FROM captures WHERE id = ?1)`
+  ).bind(captureId).run();
+}
+
 /** Xử lý một mục nhặt có link: lấy tiêu đề/ảnh/toàn văn của trang (không dùng mô hình AI). */
 export async function processCapture(env: Env, id: number): Promise<string> {
   const cap = await getCapture(env, id);
@@ -204,7 +218,7 @@ export async function processCapture(env: Env, id: number): Promise<string> {
     const title = after?.title || defaultTitle(cap.note, cap.created_at, nImg?.n ?? 0);
     await env.DB.prepare(`UPDATE captures SET status = 'done', error = NULL, title = ? WHERE id = ?`).bind(title, id).run();
     // Link cần đăng nhập (Facebook) → bài chỉ có tiêu đề là link; thay bằng tiêu đề của mục cho dễ đọc.
-    if (cap.url) await env.DB.prepare(`UPDATE items SET title_en = ? WHERE url = ? AND source_id = 'manual' AND title_en = url`).bind(title, cap.url).run();
+    if (cap.url) await syncItem(env, id);
     return `Hộp nhặt #${id}: xong`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -215,6 +229,14 @@ export async function processCapture(env: Env, id: number): Promise<string> {
 
 /** Nhịp 5 phút: xử lý tiếp 1 mục nhặt còn dở (vd lúc gửi đã hết hạn mức Gemini). */
 export async function processPendingCaptures(env: Env): Promise<string> {
+  // Bù cho các bài nhặt cũ chưa đồng bộ tiêu đề/nội dung/ảnh với mục nhặt (vài mục mỗi nhịp).
+  const { results: stale } = await env.DB.prepare(
+    `SELECT c.id FROM captures c JOIN items i ON i.id = c.item_id
+     WHERE i.source_id = 'manual' AND (i.title_en IS NOT c.title OR (c.note IS NOT NULL AND i.abstract_en IS NOT c.note)
+       OR (EXISTS (SELECT 1 FROM capture_images WHERE capture_id = c.id) AND (i.image_url IS NULL OR i.image_url NOT LIKE '/hoc-tap/anh/%')))
+       AND c.title IS NOT NULL LIMIT 5`
+  ).all<{ id: number }>();
+  for (const r of stale) await syncItem(env, r.id);
   // Đã bỏ đọc chữ trong ảnh: ảnh cũ đang chờ/lỗi đọc chữ thì thôi.
   await env.DB.prepare(`UPDATE capture_images SET ocr_status = 'skipped', ocr_text = CASE WHEN ocr_status = 'failed' THEN NULL ELSE ocr_text END WHERE ocr_status IN ('pending','failed')`).run();
   const r = await env.DB.prepare(`SELECT id FROM captures WHERE status = 'new' ORDER BY created_at LIMIT 1`).first<{ id: number }>();

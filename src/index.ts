@@ -156,6 +156,11 @@ app.get('/hoc-tap/kenh/:slug', async (c) => {
 app.get('/hoc-tap/bai/:id', async (c) => {
   const it = await getItem(c.env, Number(c.req.param('id')));
   if (!it) return c.notFound();
+  // Bài do anh tự nhặt (nguồn Hộp nhặt): mở đúng trang của mục nhặt, giống khi bấm từ Hộp nhặt.
+  if (it.source_id === 'manual' && !c.req.query('toan-van')) {
+    const cap = await c.env.DB.prepare('SELECT id FROM captures WHERE item_id = ? ORDER BY id DESC LIMIT 1').bind(it.id).first<{ id: number }>();
+    if (cap) return c.redirect(`/hoc-tap/hop-nhat/${cap.id}`, 302);
+  }
   // Mở bài → lấy toàn văn nếu chưa có. KHÔNG tự dịch: anh bấm "Dịch bài này" khi cần.
   const ft = await ensureFullText(c.env, it, 0);
   if (!ft) return c.text('Không đọc được toàn văn', 500);

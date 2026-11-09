@@ -73,7 +73,7 @@ function capRow(c: CaptureRow, back: string) {
     <div class="acts">
       <span class="meta">${timeAgoVi(c.created_at)} · ${c.via === 'shortcut' ? 'từ Phím tắt iPhone' : 'từ web'}${nImg ? ` · ${nImg} ảnh` : ''}${c.url ? ' · có link' : ''}</span>
       <a href="/hoc-tap/hop-nhat/${c.id}">Mở</a>
-      ${c.item_id ? html`<a href="/hoc-tap/bai/${c.item_id}">Đọc toàn văn</a>` : ''}
+      ${c.item_id ? html`<a href="/hoc-tap/bai/${c.item_id}?toan-van=1">Đọc toàn văn</a>` : ''}
       <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu Sổ tay'}</button></form>
       ${c.archived ? '' : html`<form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/xong"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">✓ Xong</button></form>`}
     </div>
@@ -157,7 +157,7 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
       <span class="kick">Link</span>
       <a href="${c.url}" target="_blank" rel="noopener" style="color:var(--ac);word-break:break-all">${c.url} ↗</a>
       ${c.description ? html`<span class="sum">${c.description}</span>` : ''}
-      ${item ? html`<a class="btn" style="align-self:flex-start" href="/hoc-tap/bai/${item.id}">Đọc toàn văn trong MyLife</a>` : ''}
+      ${item ? html`<a class="btn" style="align-self:flex-start" href="/hoc-tap/bai/${item.id}?toan-van=1">Đọc toàn văn trong MyLife</a>` : ''}
     </div>` : ''}
     ${c.note ? html`<div style="margin-top:1.2em"><div style="display:flex;justify-content:space-between;align-items:center;gap:.5em"><span class="kick">Nội dung</span><button class="l" type="button" style="color:var(--ac);font-weight:600" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.parentNode.nextElementSibling.textContent).then(()=>{this.textContent='Đã chép ✓'})">Chép</button></div><div class="ocrbox">${c.note}</div></div>` : ''}
     <div class="acts" style="margin-top:1.4em">
