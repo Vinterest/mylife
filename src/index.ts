@@ -269,7 +269,7 @@ app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xong|xoa|ghi-chu|xu-ly-la
   if (action === 'so-tay') await c.env.DB.prepare('UPDATE captures SET kept = 1 - kept WHERE id = ?').bind(id).run();
   if (action === 'xong') await c.env.DB.prepare('UPDATE captures SET archived = 1 - archived WHERE id = ?').bind(id).run();
   if (action === 'ghi-chu') {
-    await c.env.DB.prepare('UPDATE captures SET note = ? WHERE id = ?').bind(String(body.note ?? '').trim().slice(0, 5000) || null, id).run();
+    await c.env.DB.prepare('UPDATE captures SET note = ? WHERE id = ?').bind(String(body.note ?? '').trim().slice(0, 30000) || null, id).run();
     return go(`/hoc-tap/hop-nhat/${id}`);
   }
   if (action === 'xu-ly-lai') {

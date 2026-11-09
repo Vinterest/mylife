@@ -58,7 +58,7 @@ function capStatus(c: CaptureRow) {
 
 function capRow(c: CaptureRow, back: string) {
   const nImg = c.img_ids ? c.img_ids.split(',').length : 0;
-  const text = c.ocr_preview?.replace(/^\[[^\]]*\]\s*/, '') || c.description || c.note || '';
+  const text = c.note || c.ocr_preview?.replace(/^\[[^\]]*\]\s*/, '') || c.description || '';
   return html`<article class="cc">
   ${capThumb(c)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
@@ -99,14 +99,14 @@ fetch(f.action,{method:'POST',body:fd,headers:{Accept:'application/json'},creden
 function captureForm(open: boolean) {
   return html`<details class="capd" ${open ? 'open' : ''}><summary class="btn">+ Nhặt bài mới</summary><form id="capf" class="box cap-form" method="post" action="/hoc-tap/hop-nhat" enctype="multipart/form-data">
   <span class="kick">Nhặt bài mới</span>
-  <div><label for="capurl">Link bài (Facebook, báo, web…)</label>
-    <div class="cap-row"><input id="capurl" type="url" name="url" inputmode="url" placeholder="https://…" autocomplete="off"><button id="pastebtn" class="btn2" type="button">Dán</button></div></div>
-  <div><label>Ảnh chụp màn hình <span class="meta">(tối đa 6 ảnh · tự nén trước khi gửi)</span></label>
+  <div><label>1 · Ảnh chụp màn hình <span class="meta">(tối đa 6 ảnh · tự nén trước khi gửi)</span></label>
     <input id="capimg" type="file" name="image" accept="image/*" multiple hidden>
     <div id="drop" class="drop" role="button" tabindex="0"><b>Chọn ảnh hoặc chụp</b><br><span class="meta">trên máy tính: kéo thả hoặc Ctrl+V để dán ảnh</span></div>
     <div id="prevs" class="prevs" style="margin-top:.5em"></div></div>
+  <div><label for="capurl">2 · Link đường dẫn <span class="meta">(Facebook, YouTube, báo, web…)</span></label>
+    <div class="cap-row"><input id="capurl" type="url" name="url" inputmode="url" placeholder="https://…" autocomplete="off"><button id="pastebtn" class="btn2" type="button">Dán</button></div></div>
+  <div><label for="capnote">3 · Nội dung <span class="meta">(dán nguyên bài Facebook hoặc tự ghi)</span></label><textarea id="capnote" name="note" rows="8" style="min-height:10em" placeholder="Dán nội dung bài viết vào đây…"></textarea></div>
   <div><label>Kênh</label><div class="chans">${CHANNEL_ORDER.map((c, i) => html`<label><input type="radio" name="channel" value="${c}" ${i === 0 ? 'checked' : ''}>${CHANNELS[c].short}</label>`)}</div></div>
-  <div><label for="capnote">Ghi chú <span class="meta">(không bắt buộc)</span></label><textarea id="capnote" name="note" placeholder="Vì sao anh nhặt bài này…"></textarea></div>
   <div style="display:flex;gap:.8em;align-items:center;flex-wrap:wrap"><button id="capbtn" class="btn" type="submit">Lưu vào Hộp nhặt</button><span id="capmsg" class="cap-msg" role="status"></span></div>
 </form></details>
 <script>${raw(FORM_JS)}</script>`;
@@ -140,13 +140,6 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
     <h1 class="t1" style="margin:.3em 0 .6em">${c.title || c.url || 'Ảnh nhặt'}</h1>
     ${pending ? html`<div class="rd-state"><span class="st wait">Đang xử lý…</span><span class="meta">MyLife đang lấy thông tin link / đọc chữ trong ảnh. Trang tự tải lại sau 8 giây.</span></div><script>setTimeout(function(){location.reload()},8000)</script>` : ''}
     ${c.status === 'failed' ? html`<div class="rd-state warn"><span class="st err">Lỗi</span><span class="meta">${c.error ?? ''}</span><form method="post" action="/hoc-tap/hop-nhat/${c.id}/xu-ly-lai"><button class="btn2" type="submit">Xử lý lại</button></form></div>` : ''}
-    ${c.url ? html`<div class="box" style="margin-bottom:1.2em">
-      <span class="kick">Link</span>
-      <a href="${c.url}" target="_blank" rel="noopener" style="color:var(--ac);word-break:break-all">${c.url} ↗</a>
-      ${c.description ? html`<span class="sum">${c.description}</span>` : ''}
-      ${item ? html`<a class="btn" style="align-self:flex-start" href="/hoc-tap/bai/${item.id}">Đọc toàn văn trong MyLife</a>` : ''}
-    </div>` : ''}
-    ${c.note ? html`<div class="why" style="margin-bottom:1.2em"><b>Ghi chú:</b> ${c.note}</div>` : ''}
     ${imgs.length ? html`<div class="imgs">${imgs.map((im, k) => html`<figure>
       <img src="/hoc-tap/anh/${im.id}" alt="Ảnh ${k + 1}" loading="${k ? 'lazy' : 'eager'}">
       <figcaption class="meta">Ảnh ${k + 1}/${imgs.length} · ${Math.round(im.bytes / 1024)} KB</figcaption>
@@ -154,6 +147,13 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
         : im.ocr_status === 'failed' ? html`<span class="st err" style="align-self:flex-start">${im.ocr_text ?? 'Không đọc được chữ'}</span>`
         : html`<span class="st wait" style="align-self:flex-start">Đang đọc chữ trong ảnh…</span>`}
     </figure>`)}</div>` : ''}
+    ${c.url ? html`<div class="box" style="margin:1.2em 0 0">
+      <span class="kick">Link</span>
+      <a href="${c.url}" target="_blank" rel="noopener" style="color:var(--ac);word-break:break-all">${c.url} ↗</a>
+      ${c.description ? html`<span class="sum">${c.description}</span>` : ''}
+      ${item ? html`<a class="btn" style="align-self:flex-start" href="/hoc-tap/bai/${item.id}">Đọc toàn văn trong MyLife</a>` : ''}
+    </div>` : ''}
+    ${c.note ? html`<div style="margin-top:1.2em"><div style="display:flex;justify-content:space-between;align-items:center;gap:.5em"><span class="kick">Nội dung</span><button class="l" type="button" style="color:var(--ac);font-weight:600" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.parentNode.nextElementSibling.textContent).then(()=>{this.textContent='Đã chép ✓'})">Chép</button></div><div class="ocrbox">${c.note}</div></div>` : ''}
     <div class="acts" style="margin-top:1.4em">
       <a href="/hoc-tap/hop-nhat">‹ Về Hộp nhặt</a>
       <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><button class="${c.kept ? 'btn2' : 'btn'}" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu vào Sổ tay'}</button></form>
@@ -163,9 +163,9 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
   </article>
   <aside class="colside" style="max-width:320px">
     <form class="box cap-form" method="post" action="/hoc-tap/hop-nhat/${c.id}/ghi-chu">
-      <span class="kick">Ghi chú</span>
-      <textarea name="note" placeholder="Ý chính, việc cần làm…">${c.note ?? ''}</textarea>
-      <button class="btn2" type="submit">Lưu ghi chú</button>
+      <span class="kick">Sửa nội dung</span>
+      <textarea name="note" rows="10" style="min-height:12em" placeholder="Dán hoặc sửa nội dung bài…">${c.note ?? ''}</textarea>
+      <button class="btn2" type="submit">Lưu nội dung</button>
     </form>
   </aside>
 </section>`;

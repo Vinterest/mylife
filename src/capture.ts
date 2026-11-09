@@ -68,7 +68,7 @@ export function normChannel(c: string | undefined): Channel {
 
 /** Kiểm tra dữ liệu gửi lên; trả về lỗi dễ hiểu (hoặc null). */
 export function validateCapture(c: NewCapture): string | null {
-  if (!c.url && !c.images.length && !c.note?.trim()) return 'Chưa có gì để lưu: dán link, chọn ảnh hoặc ghi chú.';
+  if (!c.url && !c.images.length && !c.note?.trim()) return 'Chưa có gì để lưu: chọn ảnh, dán link hoặc dán nội dung.';
   if (c.url && !/^https?:\/\//i.test(c.url)) return 'Link phải bắt đầu bằng http:// hoặc https://';
   if (c.images.length > MAX_IMAGES) return `Tối đa ${MAX_IMAGES} ảnh mỗi lần.`;
   for (const im of c.images) {
@@ -83,7 +83,7 @@ export async function createCapture(env: Env, c: NewCapture): Promise<number> {
   const now = new Date().toISOString();
   const row = await env.DB.prepare(
     `INSERT INTO captures (created_at, channel, url, note, via) VALUES (?, ?, ?, ?, ?) RETURNING id`
-  ).bind(now, normChannel(c.channel), c.url?.trim() || null, c.note?.trim() || null, c.via).first<{ id: number }>();
+  ).bind(now, normChannel(c.channel), c.url?.trim() || null, c.note?.trim().slice(0, 30000) || null, c.via).first<{ id: number }>();
   const id = row!.id;
   if (c.images.length) {
     await env.DB.batch(
@@ -216,7 +216,9 @@ export async function processCapture(env: Env, id: number, maxOcr = 3): Promise<
     const left = await env.DB.prepare(`SELECT COUNT(*) AS n FROM capture_images WHERE capture_id = ? AND ocr_status = 'pending'`).bind(id).first<{ n: number }>();
     // Chưa có tiêu đề → lấy dòng đầu của chữ trong ảnh hoặc ghi chú.
     const firstOcr = await env.DB.prepare(`SELECT ocr_text FROM capture_images WHERE capture_id = ? AND ocr_status = 'done' ORDER BY id LIMIT 1`).bind(id).first<{ ocr_text: string }>();
-    const fallbackTitle = (firstOcr?.ocr_text ?? '').replace(/^\[[^\]]*\]\s*/, '').split('\n').find((l) => l.trim().length > 8)?.trim().slice(0, 140) || cap.note?.split('\n')[0]?.slice(0, 140) || null;
+    // Ưu tiên dòng đầu của Nội dung anh dán (chính xác hơn), rồi tới chữ đọc từ ảnh.
+    const firstLine = (t: string | null | undefined) => (t ?? '').split('\n').map((l) => l.trim()).find((l) => l.length > 8)?.slice(0, 140);
+    const fallbackTitle = firstLine(cap.note) || firstLine((firstOcr?.ocr_text ?? '').replace(/^\[[^\]]*\]\s*/, '')) || null;
     await env.DB.prepare(`UPDATE captures SET status = ?, error = NULL, title = COALESCE(title, ?) WHERE id = ?`).bind(left?.n ? 'new' : 'done', fallbackTitle, id).run();
     // Link Facebook (cần đăng nhập) → bài chỉ có tiêu đề là link; thay bằng dòng đầu chữ trong ảnh cho dễ đọc.
     if (cap.url && fallbackTitle) {
