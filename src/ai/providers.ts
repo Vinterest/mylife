@@ -28,6 +28,31 @@ export async function geminiJson(env: Env, prompt: string, maxOutputTokens = 120
   return text;
 }
 
+/** Gemini đọc ảnh (OCR). `b64` là ảnh mã hóa base64. Trả về chuỗi JSON. */
+export async function geminiVision(env: Env, prompt: string, b64: string, mime: string, maxOutputTokens = 4096): Promise<string> {
+  if (!env.GEMINI_API_KEY) throw new QuotaExhausted('Chưa có GEMINI_API_KEY');
+  if (!(await canUse(env, 'gemini'))) throw new QuotaExhausted('Gemini đã gần hết hạn mức hôm nay');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens },
+    }),
+  });
+  await addUsage(env, 'gemini', 1);
+  if (res.status === 429) {
+    await markExhausted(env, 'gemini');
+    throw new QuotaExhausted('Gemini báo hết lượt (429)');
+  }
+  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data: any = await res.json();
+  const text: string | undefined = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('');
+  if (!text) throw new Error('Gemini không trả nội dung');
+  return text;
+}
+
 /** Bảng quy đổi neuron theo mô hình (neuron / 1 triệu token, từ trang giá Cloudflare). */
 const NEURON_RATES: Record<string, { in: number; out: number }> = {
   '@cf/google/gemma-3-12b-it': { in: 31371, out: 50560 },

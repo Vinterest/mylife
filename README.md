@@ -23,6 +23,14 @@ Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 - Bỏ tóm tắt AI. Danh sách hiện tiêu đề + đoạn mô tả gốc tiếng Anh.
 - Ảnh đại diện: lấy từ feed (media:thumbnail, media:content, enclosure, `<img>` đầu tiên); arXiv lấy hình đầu tiên trong toàn văn; không có ảnh → ảnh tự vẽ theo tên nguồn và màu kênh (`/thumb/<mã nguồn>.svg`).
 
+## Chặng 3 · Hộp nhặt + Sổ tay (09/11/2026)
+
+- `/hoc-tap/hop-nhat`: dán link + chọn/chụp tối đa 6 ảnh (tự nén ~1600px JPEG trên điện thoại), chọn kênh, ghi chú. Ảnh lưu trong D1 (bảng `capture_images`).
+- Sau khi gửi: link → lấy tiêu đề/ảnh/toàn văn, tạo bài nguồn `manual` để đọc + dịch như bài crawl; ảnh → Gemini chép nguyên văn chữ (OCR, không tóm tắt). Mục còn dở được xử lý tiếp ở nhịp 5 phút.
+- Nút: Lưu Sổ tay, ✓ Xong (rời Hộp nhặt), Xóa, Ghi chú, Xử lý lại.
+- `/hoc-tap/so-tay`: mục nhặt đã lưu + bài đã Giữ, kèm ghi chú (ô ghi chú có ở trang bài).
+- `POST /api/nhat` cho Phím tắt iPhone (multipart: url, text, note, channel, image). Cần Service Token của Cloudflare Access; `workers_dev = false` để không đi vòng qua Access.
+
 ## Đã có ở Chặng 2
 
 - Lấy toàn văn bài về MyLife (bảng `fulltexts`): bỏ menu/quảng cáo/chân trang, giữ tiêu đề, đoạn, danh sách, trích dẫn, hình + chú thích, khối mã.

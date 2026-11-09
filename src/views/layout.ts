@@ -103,16 +103,16 @@ export const TABS: { id: string; label: string; href: string; color?: string; li
 export function g2Sub(cur: string): H {
   const items: { id: string; label: string; href: string; live: boolean }[] = [
     { id: 'today', label: 'Hôm nay', href: '/hoc-tap', live: true },
-    { id: 'inbox', label: 'Hộp nhặt', href: '/sap-co/hop-nhat', live: false },
+    { id: 'inbox', label: 'Hộp nhặt', href: '/hoc-tap/hop-nhat', live: true },
     ...CHANNEL_ORDER.map((c) => ({ id: c, label: CHANNELS[c].short, href: `/hoc-tap/kenh/${CHANNELS[c].slug}`, live: true })),
     { id: 'news', label: 'Bản tin', href: '/sap-co/ban-tin', live: false },
     { id: 'read', label: 'Đã đọc', href: '/hoc-tap/da-doc', live: true },
-    { id: 'notes', label: 'Sổ tay', href: '/sap-co/so-tay', live: false },
+    { id: 'notes', label: 'Sổ tay', href: '/hoc-tap/so-tay', live: true },
     { id: 'listen', label: 'Nghe', href: '/sap-co/nghe', live: false },
     { id: 'quota', label: 'Nguồn & hạn mức', href: '/hoc-tap/han-muc', live: true },
   ];
   return html`<nav class="wrap sub" aria-label="Học tập AI">${items.map(
-    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
+    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) || i.id === 'inbox' ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
   )}</nav>`;
 }
 
@@ -131,7 +131,7 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/app.css?v=5">
 <title>${opts.title} · MyLife</title>
 </head>
 <body>

@@ -4,6 +4,9 @@ compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
 # Giữ các biến anh thêm trên trang Cloudflare khi deploy từ GitHub (không bị ghi đè)
 keep_vars = true
+# Chỉ chạy qua mylife.gm-chess.com (có Cloudflare Access). Tắt địa chỉ *.workers.dev để không ai đi vòng qua Access.
+workers_dev = false
+preview_urls = false
 
 # Gắn vào subdomain khi deploy (cần DNS gm-chess.com nằm trên Cloudflare)
 routes = [{ pattern = "mylife.gm-chess.com", custom_domain = true }]

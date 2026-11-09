@@ -4,6 +4,7 @@ import m2 from '../migrations/0002_sources.sql';
 import m3 from '../migrations/0003_fulltext.sql';
 import m4 from '../migrations/0004_sources_ai_labs.sql';
 import m5 from '../migrations/0005_sources_robotics.sql';
+import m6 from '../migrations/0006_captures.sql';
 
 /** Tách file SQL thành từng câu lệnh: bỏ chú thích "--", tách theo dấu ";" cuối câu. */
 export function splitSql(sql: string): string[] {
@@ -24,15 +25,17 @@ let ready = false;
  */
 export async function ensureSchema(env: Env): Promise<void> {
   if (ready) return;
-  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('sources','items','daily_picks','quota_usage','jobs_log','fulltexts')").first<{ n: number }>();
-  if ((row?.n ?? 0) < 6) {
-    for (const file of [m1, m2, m3, m4, m5]) {
+  const { results: tables } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('sources','items','daily_picks','quota_usage','jobs_log','fulltexts','captures','capture_images')").all<{ name: string }>();
+  if (tables.length < 6) {
+    for (const file of [m1, m2, m3, m4, m5, m6]) {
       const stmts = splitSql(file).map((s) => env.DB.prepare(s));
       if (stmts.length) await env.DB.batch(stmts);
     }
+  } else if (tables.length < 8) {
+    await env.DB.batch(splitSql(m6).map((s) => env.DB.prepare(s))); // Chặng 3 · Hộp nhặt
   }
   // Cột thêm sau. Không để trong migrations/ để tránh xung đột với lệnh tự thêm cột.
-  const { results: cols } = await env.DB.prepare("SELECT name FROM pragma_table_info('items') WHERE name IN ('image_url','read_at')").all<{ name: string }>();
+  const { results: cols } = await env.DB.prepare("SELECT name FROM pragma_table_info('items') WHERE name IN ('image_url','read_at','note')").all<{ name: string }>();
   const has = new Set(cols.map((c) => c.name));
   if (!has.has('image_url')) {
     await env.DB.batch([
@@ -47,6 +50,7 @@ export async function ensureSchema(env: Env): Promise<void> {
       env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_items_read ON items(read_at)'),
     ]);
   }
+  if (!has.has('note')) await env.DB.prepare('ALTER TABLE items ADD COLUMN note TEXT').run(); // ghi chú Sổ tay
   // Nguồn bổ sung (khi DB đã tạo từ trước): INSERT OR IGNORE nên chạy lại cũng an toàn.
   const { results: have } = await env.DB.prepare("SELECT id FROM sources WHERE id IN ('sm-deepseek','sm-figure')").all<{ id: string }>();
   const ids = new Set(have.map((r) => r.id));

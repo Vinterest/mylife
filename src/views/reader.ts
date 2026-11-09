@@ -139,6 +139,12 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
   </article>
   <aside class="colside" style="max-width:300px">
     ${heads.length ? html`<div class="box toc"><span class="kick">Mục lục bài</span>${heads.map(({ b, i }) => html`<a class="${b.k}" href="#s${i}">${lang === 'en' ? b.t : v.vi[i] ?? b.t}</a>`)}</div>` : ''}
+    <form class="box" method="post" action="/hoc-tap/bai/${it.id}/ghi-chu" style="gap:.5em">
+      <span class="kick">Ghi chú · Sổ tay</span>
+      <textarea name="note" style="width:100%;box-sizing:border-box;min-height:5em;font:inherit;font-size:16px;padding:.5em .6em;border:1px solid #C9D1DA;border-radius:6px" placeholder="Ý chính, câu hỏi, việc cần làm…">${it.note ?? ''}</textarea>
+      <button class="btn2" type="submit">Lưu ghi chú</button>
+      <span class="meta">Có ghi chú thì bài tự vào Sổ tay.</span>
+    </form>
     <div class="box"><span class="kick">Tiến độ dịch</span><span>${v.translatedCount}/${v.translatableCount} đoạn</span><div class="bar"><i style="width:${v.translatableCount ? Math.round((v.translatedCount / v.translatableCount) * 100) : 0}%"></i></div></div>
   </aside>
 </section>

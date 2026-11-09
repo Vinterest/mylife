@@ -27,7 +27,7 @@ export type Channel = 'ai' | 'embodied' | 'robotics' | 'tcnh';
 export interface SourceRow {
   id: string;
   name: string;
-  kind: 'arxiv' | 'rss' | 'sitemap' | 'html';
+  kind: 'arxiv' | 'rss' | 'sitemap' | 'html' | 'manual';
   url: string;
   channel: Channel;
   weight: number;
@@ -60,6 +60,7 @@ export interface ItemRow {
   read_minutes: number | null;
   image_url: string | null;
   read_at: string | null;
+  note?: string | null;
   kept: number;
   dismissed: number;
   source_name?: string;

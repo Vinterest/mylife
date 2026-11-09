@@ -105,8 +105,8 @@ const SM2 = `<urlset><url><loc>https://bostondynamics.com/news/a/</loc><lastmod>
 const sm2 = parseSitemap(SM2, '/news/');
 ok(sm2[0].url.endsWith('stretch/') && sm2[0].date.toISOString().startsWith('2026-11-03'), 'Sitemap theo lastmod, mới nhất trước');
 
-const counts = ['0001_init', '0002_sources', '0003_fulltext', '0004_sources_ai_labs', '0005_sources_robotics'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
-ok(counts.join(',') === '8,1,2,1,1', `Tách SQL thành câu lệnh (${counts.join(',')})`);
+const counts = ['0001_init', '0002_sources', '0003_fulltext', '0004_sources_ai_labs', '0005_sources_robotics', '0006_captures'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
+ok(counts.join(',') === '8,1,2,1,1,5', `Tách SQL thành câu lệnh (${counts.join(',')})`);
 ok(splitSql('-- a; b\nCREATE TABLE x (a TEXT); -- c;\nINSERT INTO x VALUES (1);').length === 2, 'Tách SQL bỏ dấu ; trong chú thích');
 
 console.log(fail ? `\n${fail} kiểm tra lỗi` : '\nTất cả kiểm tra đạt');

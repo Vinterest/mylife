@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 import type { Env } from './types';
 import { quotaSnapshot } from './ai/quota';
+import type { ItemRow } from './types';
 import { allSources, getItem, latestByChannel, livePicks, readItems, recentJobs, weeklyCounts, type SortMode } from './db';
 import { channelPage, homePage, quotaPage, readPage, soonPage } from './views/pages';
 import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
+import { CAPTURE_CSS, capturePage, inboxPage, notebookPage } from './views/capture';
+import { captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, processCapture, validateCapture, type NewCapture } from './capture';
 import { ensureFullText, translateItem, viewOf } from './fulltext';
 import { JOBS, runJob } from './jobs';
 import { thumbSvg } from './views/thumb';
@@ -17,7 +20,7 @@ const app = new Hono<{ Bindings: Env }>();
 /* ---------- Tài nguyên tĩnh (không cần đăng nhập để iPhone tải được biểu tượng) ---------- */
 const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0077B6"/><text x="32" y="44" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" fill="#fff" text-anchor="middle">M</text></svg>`;
 
-app.get('/app.css', (c) => c.body(CSS + READER_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }));
+app.get('/app.css', (c) => c.body(CSS + READER_CSS + CAPTURE_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }));
 app.get('/icon.svg', (c) => c.body(ICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }));
 app.get('/apple-touch-icon.png', (c) => {
   const bin = Uint8Array.from(atob(APPLE_TOUCH_PNG_B64), (ch) => ch.charCodeAt(0));
@@ -48,7 +51,7 @@ app.get('/sw.js', (c) =>
 app.get('/thumb/:id{[a-z0-9-]+\\.svg}', async (c) => {
   const id = c.req.param('id').replace(/\.svg$/, '');
   const src = c.env.DB ? await c.env.DB.prepare('SELECT name, channel FROM sources WHERE id = ?').bind(id).first<{ name: string; channel: string }>().catch(() => null) : null;
-  return c.body(thumbSvg(src?.name ?? 'MyLife', src?.channel ?? 'ai'), 200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+  return c.body(thumbSvg(src?.name ?? 'MyLife', c.req.query('ch') || src?.channel || 'ai'), 200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
 });
 // Nhãn "NEW" cho bài vừa về (ảnh SVG, trình duyệt lưu đệm 1 ngày)
 const NEW_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 26" width="64" height="26"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF3B5C"/><stop offset="1" stop-color="#FF8A00"/></linearGradient></defs><rect x="1" y="1" width="62" height="24" rx="12" fill="url(#g)"/><rect x="1" y="1" width="62" height="11" rx="6" fill="#fff" opacity=".18"/><path d="M13 6.2l1.5 4.3 4.3 1.5-4.3 1.5L13 17.8l-1.5-4.3L7.2 12l4.3-1.5z" fill="#fff"/><text x="38.5" y="17.6" font-family="Arial Black,Arial,Helvetica,sans-serif" font-size="12.5" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing=".6">NEW</text></svg>`;
@@ -59,6 +62,13 @@ app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 app.use('*', async (c, next) => {
   c.header('X-Robots-Tag', 'noindex, nofollow');
   if (c.env.DEV_SKIP_AUTH === '1') { await ensureSchema(c.env); return next(); }
+  // Phím tắt iPhone gọi /api/* bằng Service Token của Cloudflare Access (không có email).
+  // Access chỉ cho qua khi token đúng và luôn gắn header JWT; Worker không mở qua workers.dev nên không ai đi vòng được.
+  if (new URL(c.req.url).pathname.startsWith('/api/')) {
+    if (!c.req.header('Cf-Access-Jwt-Assertion')) return c.json({ ok: false, error: 'Thiếu xác thực Cloudflare Access (Service Token)' }, 403);
+    await ensureSchema(c.env);
+    return next();
+  }
   const email = c.req.header('Cf-Access-Authenticated-User-Email');
   if (!email || email.toLowerCase() !== c.env.OWNER_EMAIL.toLowerCase()) {
     return c.text('Không có quyền truy cập. Trang này chỉ dành cho chủ sở hữu (qua Cloudflare Access).', 403);
@@ -85,9 +95,12 @@ app.use('/hoc-tap*', async (c, next) => {
      FROM items WHERE fetched_at >= ?1 OR read_at >= ?1 GROUP BY channel`
   ).bind(startVn).all<{ channel: string; fresh: number; readToday: number }>();
   const cnt = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.fresh - r.readToday)]));
+  const inbox = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures WHERE archived = 0').first<{ n: number }>().catch(() => null);
+  cnt.inbox = inbox?.n ?? 0;
   const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
     const n = cnt[ch] ?? 0;
-    return `<span class="cnt${n ? '' : ' z'}" title="Bài mới về hôm nay trừ bài đã đọc hôm nay">(${n})</span>`;
+    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : 'Bài mới về hôm nay trừ bài đã đọc hôm nay';
+    return `<span class="cnt${n ? '' : ' z'}" title="${tip}">(${n})</span>`;
   });
   const headers = new Headers(c.res.headers);
   headers.delete('Content-Length');
@@ -175,6 +188,122 @@ app.get('/hoc-tap/han-muc', async (c) => {
   const lastTick = await c.env.DB.prepare(`SELECT started_at FROM jobs_log WHERE job = 'tick' ORDER BY id DESC LIMIT 1`).first<{ started_at: string }>();
   const requested = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM fulltexts WHERE priority = 1 AND status IN ('fetched','partial','waiting_quota')`).first<{ n: number }>();
   return c.html(quotaPage({ quota: await quotaSnapshot(c.env), sources: await allSources(c.env), jobs: await recentJobs(c.env, 15), lastTick: lastTick?.started_at ?? null, requested: requested?.n ?? 0, keys, fulltext: Object.fromEntries(ft.map((r) => [r.status, r.n])) }));
+});
+
+
+/* ---------- Chặng 3 · Hộp nhặt + Sổ tay ---------- */
+async function readCaptureForm(fd: FormData, via: NewCapture['via']): Promise<NewCapture> {
+  const text = String(fd.get('text') ?? ''); // Phím tắt có thể gửi cả đoạn chữ có link
+  let url = String(fd.get('url') ?? '').trim() || firstUrl(text);
+  if (url && !/^https?:\/\//i.test(url)) url = firstUrl(url) ?? url;
+  const noteParts = [String(fd.get('note') ?? '').trim(), url ? text.replace(url, '').trim() : text.trim()].filter(Boolean);
+  const images: NewCapture['images'] = [];
+  for (const v of fd.getAll('image')) {
+    if (typeof v === 'string' || !v.size) continue;
+    images.push({ mime: v.type || 'image/jpeg', data: await v.arrayBuffer() });
+  }
+  return { url: url || undefined, note: [...new Set(noteParts)].join('\n') || undefined, channel: String(fd.get('channel') ?? ''), images, via };
+}
+
+app.get('/hoc-tap/hop-nhat', async (c) => {
+  const showDone = c.req.query('xem') === 'xong';
+  const items = await listCaptures(c.env, showDone ? 'c.archived = 1' : 'c.archived = 0', 100);
+  const done = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures WHERE archived = 1').first<{ n: number }>();
+  return c.html(inboxPage({ items, done: done?.n ?? 0, showDone }));
+});
+
+app.post('/hoc-tap/hop-nhat', async (c) => {
+  const wantsJson = (c.req.header('Accept') ?? '').includes('application/json');
+  if (!sameOrigin(c)) return c.json({ ok: false, error: 'Yêu cầu không hợp lệ' }, 400);
+  const cap = await readCaptureForm(await c.req.formData(), 'web');
+  const err = validateCapture(cap);
+  if (err) return wantsJson ? c.json({ ok: false, error: err }, 400) : c.text(err, 400);
+  const id = await createCapture(c.env, cap);
+  c.executionCtx.waitUntil(processCapture(c.env, id).catch(() => ''));
+  const url = `/hoc-tap/hop-nhat/${id}`;
+  return wantsJson ? c.json({ ok: true, id, url }) : c.redirect(url, 303);
+});
+
+app.get('/hoc-tap/hop-nhat/:id{[0-9]+}', async (c) => {
+  const cap = await getCapture(c.env, Number(c.req.param('id')));
+  if (!cap) return c.notFound();
+  const item = cap.item_id ? await getItem(c.env, cap.item_id) : null;
+  return c.html(capturePage(cap, await captureImages(c.env, cap.id), item));
+});
+
+app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xong|xoa|ghi-chu|xu-ly-lai}', async (c) => {
+  if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
+  const id = Number(c.req.param('id'));
+  const action = c.req.param('action');
+  const body = await c.req.parseBody();
+  const back = String(body.back ?? `/hoc-tap/hop-nhat/${id}`);
+  const go = (u: string) => c.redirect(u.startsWith('/') ? u : '/hoc-tap/hop-nhat', 303);
+  if (action === 'so-tay') await c.env.DB.prepare('UPDATE captures SET kept = 1 - kept WHERE id = ?').bind(id).run();
+  if (action === 'xong') await c.env.DB.prepare('UPDATE captures SET archived = 1 - archived WHERE id = ?').bind(id).run();
+  if (action === 'ghi-chu') {
+    await c.env.DB.prepare('UPDATE captures SET note = ? WHERE id = ?').bind(String(body.note ?? '').trim().slice(0, 5000) || null, id).run();
+    return go(`/hoc-tap/hop-nhat/${id}`);
+  }
+  if (action === 'xu-ly-lai') {
+    await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE captures SET status = 'new', error = NULL WHERE id = ?`).bind(id),
+      c.env.DB.prepare(`UPDATE capture_images SET ocr_status = 'pending' WHERE capture_id = ? AND ocr_status = 'failed'`).bind(id),
+    ]);
+    c.executionCtx.waitUntil(processCapture(c.env, id).catch(() => ''));
+    return go(`/hoc-tap/hop-nhat/${id}`);
+  }
+  if (action === 'xoa') {
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM capture_images WHERE capture_id = ?').bind(id),
+      c.env.DB.prepare('DELETE FROM captures WHERE id = ?').bind(id),
+    ]);
+    return go('/hoc-tap/hop-nhat');
+  }
+  return go(back);
+});
+
+// Ảnh trong Hộp nhặt (lưu trong D1). Ảnh không đổi nên cho trình duyệt lưu đệm lâu.
+app.get('/hoc-tap/anh/:id{[0-9]+}', async (c) => {
+  const img = await imageData(c.env, Number(c.req.param('id')));
+  if (!img) return c.notFound();
+  return c.body(img.data.slice().buffer as ArrayBuffer, 200, { 'Content-Type': img.mime, 'Cache-Control': 'private, max-age=31536000, immutable' });
+});
+
+app.get('/hoc-tap/so-tay', async (c) => {
+  const captures = await listCaptures(c.env, 'c.kept = 1', 200);
+  const { results: items } = await c.env.DB.prepare(
+    `SELECT i.*, s.name AS source_name FROM items i JOIN sources s ON s.id = i.source_id
+     WHERE i.kept = 1 AND i.source_id <> 'manual' ORDER BY i.fetched_at DESC LIMIT 200`
+  ).all<ItemRow>();
+  return c.html(notebookPage({ captures, items }));
+});
+
+app.post('/hoc-tap/bai/:id{[0-9]+}/ghi-chu', async (c) => {
+  if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
+  const id = Number(c.req.param('id'));
+  const note = String((await c.req.parseBody()).note ?? '').trim().slice(0, 5000) || null;
+  // Có ghi chú thì tự "Giữ" bài để bài vào Sổ tay.
+  await c.env.DB.prepare('UPDATE items SET note = ?, kept = CASE WHEN ? IS NOT NULL THEN 1 ELSE kept END WHERE id = ?').bind(note, note, id).run();
+  return c.redirect(`/hoc-tap/bai/${id}`, 303);
+});
+
+/** Phím tắt iPhone "Gửi tới MyLife": multipart với url / text / note / channel / image (nhiều ảnh). */
+app.post('/api/nhat', async (c) => {
+  let cap: NewCapture;
+  const ct = c.req.header('Content-Type') ?? '';
+  if (ct.includes('application/json')) {
+    const j = await c.req.json<{ url?: string; text?: string; note?: string; channel?: string }>();
+    const fd = new FormData();
+    for (const k of ['url', 'text', 'note', 'channel'] as const) if (j[k]) fd.set(k, String(j[k]));
+    cap = await readCaptureForm(fd, 'shortcut');
+  } else {
+    cap = await readCaptureForm(await c.req.formData(), 'shortcut');
+  }
+  const err = validateCapture(cap);
+  if (err) return c.json({ ok: false, error: err }, 400);
+  const id = await createCapture(c.env, cap);
+  c.executionCtx.waitUntil(processCapture(c.env, id).catch(() => ''));
+  return c.json({ ok: true, id, message: `Đã lưu vào Hộp nhặt (mục #${id}${cap.images.length ? `, ${cap.images.length} ảnh` : ''})`, url: `https://${new URL(c.req.url).host}/hoc-tap/hop-nhat/${id}` });
 });
 
 app.get('/sap-co/:key', (c) => c.html(soonPage(c.req.param('key'))));

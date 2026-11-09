@@ -1,4 +1,5 @@
 import type { Env } from './types';
+import { processPendingCaptures } from './capture';
 import { crawlSource, markDue, nextDueSource } from './crawl';
 import { cleanupFullTexts, fetchNextFullText, translateRequested } from './fulltext';
 
@@ -45,6 +46,7 @@ export async function tick(env: Env): Promise<string> {
     await step(notes, `Crawl ${src.id}`, () => crawlSource(env, src));
     crawled++;
   }
+  await step(notes, 'Hộp nhặt', () => processPendingCaptures(env));
   await step(notes, 'Dịch', () => translateRequested(env, 2));
   // Giữ tổng yêu cầu mạng dưới 50: nhịp đã crawl đủ 3 nguồn thì để lấy toàn văn cho nhịp sau.
   if (crawled < CRAWL_PER_TICK) await step(notes, 'Toàn văn', () => fetchNextFullText(env));
