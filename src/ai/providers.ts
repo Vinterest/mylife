@@ -16,48 +16,65 @@ async function gemini429(env: Env, res: Response): Promise<never> {
 
 export class QuotaExhausted extends Error {}
 
-/** Gemini qua Google AI Studio (gói miễn phí). Trả về chuỗi JSON. */
-export async function geminiJson(env: Env, prompt: string, maxOutputTokens = 1200): Promise<string> {
+/**
+ * Mô hình Gemini thử lần lượt (GEMINI_MODEL, phân cách bằng dấu phẩy). Google ngừng cấp các mô hình cũ cho
+ * key mới (trả 404 "not found") → tự chuyển sang mô hình kế tiếp và nhớ mô hình chạy được trong lượt này.
+ */
+const DEFAULT_MODELS = 'gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-2.5-flash-lite,gemini-3.5-flash';
+const deadModels = new Set<string>();
+let goodModel: string | null = null;
+
+function geminiModels(env: Env): string[] {
+  const list = [...new Set(`${env.GEMINI_MODEL || ''},${DEFAULT_MODELS}`.split(',').map((m) => m.trim()).filter(Boolean))];
+  const alive = list.filter((m) => !deadModels.has(m));
+  return goodModel && alive.includes(goodModel) ? [goodModel, ...alive.filter((m) => m !== goodModel)] : alive;
+}
+
+/** Gọi generateContent; xử lý 404 (đổi mô hình), 429 (phút/ngày), lỗi khác. Trả về chữ của câu trả lời. */
+async function geminiCall(env: Env, parts: unknown[], temperature: number, maxOutputTokens: number): Promise<string> {
   if (!env.GEMINI_API_KEY) throw new QuotaExhausted('Chưa có GEMINI_API_KEY');
   if (!(await canUse(env, 'gemini'))) throw new QuotaExhausted('Gemini đã gần hết hạn mức hôm nay');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens },
-    }),
-  });
-  await addUsage(env, 'gemini', 1);
-  if (res.status === 429) await gemini429(env, res);
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data: any = await res.json();
-  const text: string | undefined = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('');
-  if (!text) throw new Error('Gemini không trả nội dung');
-  return text;
+  let last = '';
+  for (const model of geminiModels(env)) {
+    const gen: Record<string, unknown> = { responseMimeType: 'application/json', temperature, maxOutputTokens };
+    // Mô hình Gemini 3 mặc định "suy nghĩ" (tốn token, chậm) — dịch/đọc chữ không cần.
+    if (/^gemini-3/.test(model)) gen.thinkingConfig = { thinkingLevel: 'minimal' };
+    const send = (g: Record<string, unknown>) =>
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY! },
+        body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: g }),
+      });
+    let res = await send(gen);
+    if (res.status === 400 && gen.thinkingConfig) {
+      const body = await res.clone().text();
+      if (/thinking/i.test(body)) { delete gen.thinkingConfig; res = await send(gen); }
+    }
+    if (res.status === 404) {
+      deadModels.add(model);
+      last = `${model}: không có (404)`;
+      continue;
+    }
+    await addUsage(env, 'gemini', 1);
+    if (res.status === 429) await gemini429(env, res);
+    if (!res.ok) throw new Error(`Gemini ${model} HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    goodModel = model;
+    const data: any = await res.json();
+    const text: string | undefined = data?.candidates?.[0]?.content?.parts?.filter((p: any) => !p.thought).map((p: any) => p.text ?? '').join('');
+    if (!text) throw new Error(`Gemini ${model} không trả nội dung`);
+    return text;
+  }
+  throw new Error(`Không tìm thấy mô hình Gemini dùng được (${last}). Sửa GEMINI_MODEL trong wrangler.toml.`);
+}
+
+/** Gemini qua Google AI Studio (gói miễn phí). Trả về chuỗi JSON. */
+export async function geminiJson(env: Env, prompt: string, maxOutputTokens = 1200): Promise<string> {
+  return geminiCall(env, [{ text: prompt }], 0.3, maxOutputTokens);
 }
 
 /** Gemini đọc ảnh (OCR). `b64` là ảnh mã hóa base64. Trả về chuỗi JSON. */
 export async function geminiVision(env: Env, prompt: string, b64: string, mime: string, maxOutputTokens = 4096): Promise<string> {
-  if (!env.GEMINI_API_KEY) throw new QuotaExhausted('Chưa có GEMINI_API_KEY');
-  if (!(await canUse(env, 'gemini'))) throw new QuotaExhausted('Gemini đã gần hết hạn mức hôm nay');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL}:generateContent`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens },
-    }),
-  });
-  await addUsage(env, 'gemini', 1);
-  if (res.status === 429) await gemini429(env, res);
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data: any = await res.json();
-  const text: string | undefined = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('');
-  if (!text) throw new Error('Gemini không trả nội dung');
-  return text;
+  return geminiCall(env, [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }], 0, maxOutputTokens);
 }
 
 /** Bảng quy đổi neuron theo mô hình (neuron / 1 triệu token, từ trang giá Cloudflare). */

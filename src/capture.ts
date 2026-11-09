@@ -248,6 +248,11 @@ export async function processCapture(env: Env, id: number, maxOcr = 3): Promise<
 
 /** Nhịp 5 phút: xử lý tiếp 1 mục nhặt còn dở (vd lúc gửi đã hết hạn mức Gemini). */
 export async function processPendingCaptures(env: Env): Promise<string> {
+  // Ảnh đọc chữ lỗi vì mô hình Gemini cũ bị ngừng (404) → tự đọc lại bằng mô hình mới.
+  const re = await env.DB.prepare(`UPDATE capture_images SET ocr_status = 'pending' WHERE ocr_status = 'failed' AND ocr_text LIKE '%HTTP 404%'`).run();
+  if (re.meta.changes) {
+    await env.DB.prepare(`UPDATE captures SET status = 'new', error = NULL WHERE id IN (SELECT capture_id FROM capture_images WHERE ocr_status = 'pending')`).run();
+  }
   const r = await env.DB.prepare(`SELECT id FROM captures WHERE status = 'new' ORDER BY created_at LIMIT 1`).first<{ id: number }>();
   return r ? processCapture(env, r.id, 2) : '';
 }

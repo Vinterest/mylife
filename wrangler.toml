@@ -33,7 +33,8 @@ crons = ["*/5 * * * *"]
 
 [vars]
 OWNER_EMAIL = "son.phanhong@gmail.com"
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+# Thử lần lượt; mô hình nào Google báo không có (404) thì tự chuyển sang mô hình sau
+GEMINI_MODEL = "gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-2.5-flash-lite"
 WORKERS_AI_MODEL = "@cf/google/gemma-3-12b-it"
 # Hạn mức miễn phí (chỉnh theo trang của nhà cung cấp khi thay đổi)
 GEMINI_DAILY_REQUESTS = "1000"
