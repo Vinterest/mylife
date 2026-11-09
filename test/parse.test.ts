@@ -105,8 +105,16 @@ const SM2 = `<urlset><url><loc>https://bostondynamics.com/news/a/</loc><lastmod>
 const sm2 = parseSitemap(SM2, '/news/');
 ok(sm2[0].url.endsWith('stretch/') && sm2[0].date.toISOString().startsWith('2026-11-03'), 'Sitemap theo lastmod, mới nhất trước');
 
-const counts = ['0001_init', '0002_sources', '0003_fulltext', '0004_sources_ai_labs', '0005_sources_robotics', '0006_captures'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
-ok(counts.join(',') === '8,1,2,1,1,5', `Tách SQL thành câu lệnh (${counts.join(',')})`);
+// Lọc 2 nhóm (AI VÀ ngân hàng), chữ HOA ngắn so đúng chữ hoa
+const K = 'AI,trí tuệ nhân tạo&ngân hàng,fintech';
+ok(matchesKeywords('Ngân hàng ABC ứng dụng AI chấm điểm tín dụng', K), '2 nhóm: có AI và ngân hàng → lấy');
+ok(!matchesKeywords('Ai sẽ thắng cuộc đua lãi suất ngân hàng?', K), '"Ai" (ai đó) tiếng Việt không bị tính là AI');
+ok(!matchesKeywords('Startup AI gọi vốn 10 triệu USD', K), '2 nhóm: có AI nhưng không có ngân hàng → bỏ');
+ok(matchesKeywords('KB국민은행, AI를 활용한 상담 서비스 출시 bank', 'AI,인공지능&bank,은행'), 'Tiếng Hàn: "AI를" vẫn khớp AI');
+ok(matchesKeywords('Bank deploys GenAI assistant', 'ai,genai'), 'Từ khóa thường vẫn không phân biệt hoa/thường');
+
+const counts = ['0001_init', '0002_sources', '0003_fulltext', '0004_sources_ai_labs', '0005_sources_robotics', '0006_captures', '0007_sources_asia_finance'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
+ok(counts.join(',') === '8,1,2,1,1,5,1', `Tách SQL thành câu lệnh (${counts.join(',')})`);
 ok(splitSql('-- a; b\nCREATE TABLE x (a TEXT); -- c;\nINSERT INTO x VALUES (1);').length === 2, 'Tách SQL bỏ dấu ; trong chú thích');
 
 console.log(fail ? `\n${fail} kiểm tra lỗi` : '\nTất cả kiểm tra đạt');

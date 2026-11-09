@@ -91,11 +91,27 @@ export function scoreItem(p: { channel: Channel; publishedAt: string; text: stri
 }
 
 /** Khớp từ khóa nguồn (không phân biệt hoa thường; từ ngắn như "AI" khớp nguyên từ). */
+/**
+ * Lọc theo từ khóa. "a,b,c" = có ít nhất một từ. Dùng "&" để bắt buộc nhiều nhóm cùng có,
+ * vd "ai,genai&bank,fintech" = bài phải nhắc tới AI VÀ ngân hàng/fintech.
+ */
 export function matchesKeywords(text: string, keywords: string | null): boolean {
   if (!keywords || !keywords.trim()) return true;
-  const t = text.toLowerCase();
-  return keywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean).some((k) => {
-    if (k.length <= 3) return new RegExp(`(^|[^\\p{L}\\p{N}])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^\\p{L}\\p{N}]|$)`, 'u').test(t);
-    return t.includes(k);
+  return keywords.split('&').every((group) => matchesAny(text, group));
+}
+
+const esc = (k: string) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function matchesAny(text: string, group: string): boolean {
+  const lower = text.toLowerCase();
+  const ks = group.split(',').map((k) => k.trim()).filter(Boolean);
+  if (!ks.length) return true;
+  return ks.some((raw) => {
+    const k = raw.toLowerCase();
+    if (k.length > 3) return lower.includes(k);
+    // Từ ngắn: phải đứng riêng (không nằm trong từ Latin khác). Viết HOA trong cấu hình (vd "AI")
+    // thì so đúng chữ hoa — để "ai" (ai đó) trong tiếng Việt không bị tính là AI. Chữ Hàn/Thái liền sau vẫn được.
+    const cs = raw !== k;
+    return new RegExp(`(^|[^A-Za-z0-9])${esc(cs ? raw : k)}([^A-Za-z0-9]|$)`, cs ? '' : 'i').test(cs ? text : lower);
   });
 }
