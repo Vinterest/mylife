@@ -131,7 +131,7 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=11">
+<link rel="stylesheet" href="/app.css?v=13">
 <title>${opts.title} · MyLife</title>
 </head>
 <body>

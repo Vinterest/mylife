@@ -38,6 +38,9 @@ export const CAPTURE_CSS = `
 .imgs{display:flex;flex-direction:column;gap:1.2em}
 .imgs figure{margin:0;display:flex;flex-direction:column;gap:.5em}
 .imgs img{max-width:100%;max-height:80vh;width:auto;border-radius:6px;border:1px solid var(--line);align-self:flex-start}
+.imgs .zoomhint{display:none}
+/* Máy tính: ảnh chụp từ điện thoại phóng to ~2.5 lần (rộng tới 800px) cho dễ đọc; bấm ảnh để thu về vừa màn hình */
+@media (min-width:900px){.imgs img{max-height:none;width:min(100%,800px);cursor:zoom-out}.imgs img.fit{width:auto;max-height:80vh;cursor:zoom-in}.imgs .zoomhint{display:inline}}
 .ocrbox{white-space:pre-wrap;line-height:1.6;background:#F7F9FA;border:1px solid var(--line);border-radius:6px;padding:.8em 1em;font-size:.95em}
 @media (max-width:640px){.cc .th{width:96px;order:2}}
 @media (max-width:640px){.dropk{display:none}.cap-form{gap:.55em}.cap-form label{font-size:.88em}.chans label{padding:.25em .65em}.prevs figure{width:64px;height:64px}}
@@ -145,8 +148,8 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
     ${pending ? html`<div class="rd-state"><span class="st wait">Đang xử lý…</span><span class="meta">MyLife đang lấy tiêu đề và nội dung của link. Trang tự tải lại sau 8 giây.</span></div><script>setTimeout(function(){location.reload()},8000)</script>` : ''}
     ${c.status === 'failed' ? html`<div class="rd-state warn"><span class="st err">Lỗi</span><span class="meta">${c.error ?? ''}</span><form method="post" action="/hoc-tap/hop-nhat/${c.id}/xu-ly-lai"><button class="btn2" type="submit">Xử lý lại</button></form></div>` : ''}
     ${imgs.length ? html`<div class="imgs">${imgs.map((im, k) => html`<figure>
-      <img src="/hoc-tap/anh/${im.id}" alt="Ảnh ${k + 1}" loading="${k ? 'lazy' : 'eager'}">
-      <figcaption class="meta">Ảnh ${k + 1}/${imgs.length} · ${Math.round(im.bytes / 1024)} KB</figcaption>
+      <img src="/hoc-tap/anh/${im.id}" alt="Ảnh ${k + 1}" loading="${k ? 'lazy' : 'eager'}" onclick="this.classList.toggle('fit')">
+      <figcaption class="meta">Ảnh ${k + 1}/${imgs.length} · ${Math.round(im.bytes / 1024)} KB<span class="zoomhint"> · bấm ảnh để thu nhỏ / phóng to</span></figcaption>
       ${im.ocr_status === 'done' && im.ocr_text ? html`<div><div style="display:flex;justify-content:space-between;align-items:center;gap:.5em"><span class="kick">Chữ trong ảnh</span><button class="l" type="button" style="color:var(--ac);font-weight:600" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.parentNode.nextElementSibling.textContent).then(()=>{this.textContent='Đã chép ✓'})">Chép chữ</button></div><div class="ocrbox">${im.ocr_text}</div></div>`
         : ''}
     </figure>`)}</div>` : ''}
