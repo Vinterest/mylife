@@ -230,7 +230,7 @@ async function readCaptureForm(fd: FormData, via: NewCapture['via']): Promise<Ne
     if (typeof v === 'string' || !v.size) continue;
     images.push({ mime: v.type || 'image/jpeg', data: await v.arrayBuffer() });
   }
-  return { url: url || undefined, note: [...new Set(noteParts)].join('\n') || undefined, channel: String(fd.get('channel') ?? ''), images, via };
+  return { title: String(fd.get('title') ?? '').trim() || undefined, url: url || undefined, note: [...new Set(noteParts)].join('\n') || undefined, channel: String(fd.get('channel') ?? ''), images, via };
 }
 
 app.get('/hoc-tap/hop-nhat', async (c) => {
@@ -275,7 +275,6 @@ app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xong|xoa|ghi-chu|xu-ly-la
   if (action === 'xu-ly-lai') {
     await c.env.DB.batch([
       c.env.DB.prepare(`UPDATE captures SET status = 'new', error = NULL WHERE id = ?`).bind(id),
-      c.env.DB.prepare(`UPDATE capture_images SET ocr_status = 'pending' WHERE capture_id = ? AND ocr_status = 'failed'`).bind(id),
     ]);
     c.executionCtx.waitUntil(processCapture(c.env, id).catch(() => ''));
     return go(`/hoc-tap/hop-nhat/${id}`);
@@ -320,9 +319,9 @@ app.post('/api/nhat', async (c) => {
   let cap: NewCapture;
   const ct = c.req.header('Content-Type') ?? '';
   if (ct.includes('application/json')) {
-    const j = await c.req.json<{ url?: string; text?: string; note?: string; channel?: string }>();
+    const j = await c.req.json<{ title?: string; url?: string; text?: string; note?: string; channel?: string }>();
     const fd = new FormData();
-    for (const k of ['url', 'text', 'note', 'channel'] as const) if (j[k]) fd.set(k, String(j[k]));
+    for (const k of ['title', 'url', 'text', 'note', 'channel'] as const) if (j[k]) fd.set(k, String(j[k]));
     cap = await readCaptureForm(fd, 'shortcut');
   } else {
     cap = await readCaptureForm(await c.req.formData(), 'shortcut');

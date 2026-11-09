@@ -52,7 +52,7 @@ function capThumb(c: CaptureRow) {
 
 function capStatus(c: CaptureRow) {
   if (c.status === 'failed') return html`<span class="st err">Lỗi xử lý</span>`;
-  if (c.status === 'new' || (c.ocr_pending ?? 0) > 0) return html`<span class="st wait">Đang xử lý…</span>`;
+  if (c.status === 'new') return html`<span class="st wait">Đang lấy link…</span>`;
   return '';
 }
 
@@ -106,6 +106,7 @@ function captureForm(open: boolean) {
   <div><label for="capurl">2 · Link đường dẫn <span class="meta">(Facebook, YouTube, báo, web…)</span></label>
     <div class="cap-row"><input id="capurl" type="url" name="url" inputmode="url" placeholder="https://…" autocomplete="off"><button id="pastebtn" class="btn2" type="button">Dán</button></div></div>
   <div><label for="capnote">3 · Nội dung <span class="meta">(dán nguyên bài Facebook hoặc tự ghi)</span></label><textarea id="capnote" name="note" rows="8" style="min-height:10em" placeholder="Dán nội dung bài viết vào đây…"></textarea></div>
+  <div><label for="captitle">4 · Tiêu đề <span class="meta">(không bắt buộc — để trống thì MyLife tự đặt)</span></label><input id="captitle" type="text" name="title" maxlength="300" placeholder="Tự đặt tiêu đề cho mục này…" autocomplete="off" style="width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:.6em .7em;border:1px solid #C9D1DA;border-radius:6px;background:#fff;color:inherit"></div>
   <div><label>Kênh</label><div class="chans">${CHANNEL_ORDER.map((c, i) => html`<label><input type="radio" name="channel" value="${c}" ${i === 0 ? 'checked' : ''}>${CHANNELS[c].short}</label>`)}</div></div>
   <div style="display:flex;gap:.8em;align-items:center;flex-wrap:wrap"><button id="capbtn" class="btn" type="submit">Lưu vào Hộp nhặt</button><span id="capmsg" class="cap-msg" role="status"></span></div>
 </form></details>
@@ -123,14 +124,14 @@ export function inboxPage(p: { items: CaptureRow[]; done: number; showDone: bool
   </div>
   <aside class="colside" style="order:-1">
     ${captureForm(!p.items.length || p.showDone === false && p.items.length < 3)}
-    <div class="box capinfo"><span class="kick">Sau khi gửi</span><span class="meta">Link: MyLife tự lấy tiêu đề, ảnh và toàn văn (nếu trang công khai; Facebook thường cần đăng nhập nên chỉ có link). Ảnh: Gemini chép lại nguyên văn chữ trong ảnh trong khoảng 10–30 giây. Bấm “✓ Xong” để đưa mục ra khỏi Hộp nhặt, “Lưu Sổ tay” để giữ lâu dài.</span></div>
+    <div class="box capinfo"><span class="kick">Sau khi gửi</span><span class="meta">Ảnh và nội dung được lưu nguyên như anh gửi (không dùng AI). Link: MyLife tự lấy tiêu đề, ảnh và toàn văn nếu trang công khai; Facebook thường cần đăng nhập nên chỉ lưu link. Bấm “✓ Xong” để đưa mục ra khỏi Hộp nhặt, “Lưu Sổ tay” để giữ lâu dài.</span></div>
   </aside>
 </section>`;
   return page({ title: 'Hộp nhặt', tab: 'g2', sub: g2Sub('inbox'), body });
 }
 
 export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow | null, older: CaptureRow[]) {
-  const pending = c.status === 'new' || imgs.some((i) => i.ocr_status === 'pending');
+  const pending = c.status === 'new';
   const back = `/hoc-tap/hop-nhat/${c.id}`;
   const body = html`
 <section class="cols">
@@ -138,14 +139,13 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
     <div class="meta"><a href="/hoc-tap/hop-nhat">Hộp nhặt</a> › mục #${c.id}</div>
     <div class="kick" style="margin-top:.6em">${chName(c.channel)} · nhặt ${timeAgoVi(c.created_at)} ${c.via === 'shortcut' ? '· từ Phím tắt iPhone' : '· từ web'}</div>
     <h1 class="t1" style="margin:.3em 0 .6em">${c.title || c.url || 'Ảnh nhặt'}</h1>
-    ${pending ? html`<div class="rd-state"><span class="st wait">Đang xử lý…</span><span class="meta">MyLife đang lấy thông tin link / đọc chữ trong ảnh. Trang tự tải lại sau 8 giây.</span></div><script>setTimeout(function(){location.reload()},8000)</script>` : ''}
+    ${pending ? html`<div class="rd-state"><span class="st wait">Đang xử lý…</span><span class="meta">MyLife đang lấy tiêu đề và nội dung của link. Trang tự tải lại sau 8 giây.</span></div><script>setTimeout(function(){location.reload()},8000)</script>` : ''}
     ${c.status === 'failed' ? html`<div class="rd-state warn"><span class="st err">Lỗi</span><span class="meta">${c.error ?? ''}</span><form method="post" action="/hoc-tap/hop-nhat/${c.id}/xu-ly-lai"><button class="btn2" type="submit">Xử lý lại</button></form></div>` : ''}
     ${imgs.length ? html`<div class="imgs">${imgs.map((im, k) => html`<figure>
       <img src="/hoc-tap/anh/${im.id}" alt="Ảnh ${k + 1}" loading="${k ? 'lazy' : 'eager'}">
       <figcaption class="meta">Ảnh ${k + 1}/${imgs.length} · ${Math.round(im.bytes / 1024)} KB</figcaption>
-      ${im.ocr_status === 'done' ? html`<div><div style="display:flex;justify-content:space-between;align-items:center;gap:.5em"><span class="kick">Chữ trong ảnh</span><button class="l" type="button" style="color:var(--ac);font-weight:600" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.parentNode.nextElementSibling.textContent).then(()=>{this.textContent='Đã chép ✓'})">Chép chữ</button></div><div class="ocrbox">${im.ocr_text}</div></div>`
-        : im.ocr_status === 'failed' ? html`<span class="st err" style="align-self:flex-start">${im.ocr_text ?? 'Không đọc được chữ'}</span>`
-        : html`<span class="st wait" style="align-self:flex-start">Đang đọc chữ trong ảnh…</span>`}
+      ${im.ocr_status === 'done' && im.ocr_text ? html`<div><div style="display:flex;justify-content:space-between;align-items:center;gap:.5em"><span class="kick">Chữ trong ảnh</span><button class="l" type="button" style="color:var(--ac);font-weight:600" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.parentNode.nextElementSibling.textContent).then(()=>{this.textContent='Đã chép ✓'})">Chép chữ</button></div><div class="ocrbox">${im.ocr_text}</div></div>`
+        : ''}
     </figure>`)}</div>` : ''}
     ${c.url ? html`<div class="box" style="margin:1.2em 0 0">
       <span class="kick">Link</span>
