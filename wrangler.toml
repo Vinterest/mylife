@@ -36,6 +36,8 @@ WORKERS_AI_MODEL = "@cf/google/gemma-3-12b-it"
 GEMINI_DAILY_REQUESTS = "1000"
 WORKERS_AI_DAILY_NEURONS = "10000"
 QUOTA_STOP_RATIO = "0.95"
+# Vòng 1: mỗi key dùng tới 50% rồi chuyển key kế tiếp; vòng 2 dùng tiếp tới 95%
+QUOTA_ROUND_RATIO = "0.5"
 # Vùng của tài nguyên Azure Translator (đổi theo vùng anh tạo)
 AZURE_TRANSLATOR_REGION = "southeastasia"
 # Đặt "1" khi chạy local để bỏ qua kiểm tra đăng nhập Access

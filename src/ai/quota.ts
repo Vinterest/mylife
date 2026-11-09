@@ -46,6 +46,31 @@ export async function markExhausted(env: Env, p: Provider): Promise<void> {
   ).bind(p, PROVIDERS[p].period(), PROVIDERS[p].limit(env)).run();
 }
 
+/** Tỷ lệ đã dùng (0–1) của nhiều dịch vụ trong kỳ hiện tại — một truy vấn D1. */
+export async function usageRatios(env: Env, keys: Provider[]): Promise<Record<string, number>> {
+  if (!keys.length) return {};
+  const cond = keys.map(() => '(provider = ? AND period = ?)').join(' OR ');
+  const { results } = await env.DB.prepare(`SELECT provider, used FROM quota_usage WHERE ${cond}`)
+    .bind(...keys.flatMap((p) => [p, PROVIDERS[p].period()]))
+    .all<{ provider: Provider; used: number }>();
+  const used = Object.fromEntries(results.map((r) => [r.provider, r.used]));
+  return Object.fromEntries(keys.map((p) => [p, (used[p] ?? 0) / PROVIDERS[p].limit(env)]));
+}
+
+/**
+ * Thứ tự dùng key theo vòng:
+ *  - Vòng 1: lần lượt từng key tới 50% hạn mức (QUOTA_ROUND_RATIO).
+ *  - Vòng 2: quay lại key đầu, dùng tiếp tới 95% (QUOTA_STOP_RATIO), rồi key kế tiếp…
+ *  - Tất cả ≥ 95% → trả về rỗng (dừng, chờ hạn mức mới).
+ */
+export async function rotationOrder<T extends Provider>(env: Env, chain: T[]): Promise<T[]> {
+  const ratio = await usageRatios(env, chain);
+  const round1 = Number(env.QUOTA_ROUND_RATIO) || 0.5;
+  const stop = Number(env.QUOTA_STOP_RATIO) || 0.95;
+  const r1 = chain.filter((p) => ratio[p] < round1);
+  return r1.length ? r1 : chain.filter((p) => ratio[p] < stop);
+}
+
 export async function quotaSnapshot(env: Env) {
   const keys = Object.keys(PROVIDERS) as Provider[];
   // Một truy vấn cho cả 6 dịch vụ (giữ số truy vấn D1 mỗi lượt thấp).

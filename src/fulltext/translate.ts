@@ -1,6 +1,7 @@
 import type { Env } from '../types';
 import { geminiJson, QuotaExhausted, workersAiJson } from '../ai/providers';
 import { azureTranslate, deeplTranslate, googleTranslate } from '../ai/mt';
+import { rotationOrder } from '../ai/quota';
 import type { Block } from './extract';
 
 export type Engine = 'gemini' | 'workers_ai' | 'azure' | 'deepl' | 'google_tr';
@@ -58,6 +59,16 @@ const CALLS: Record<Engine, (env: Env, texts: string[]) => Promise<string[]>> = 
   google_tr: googleTranslate,
 };
 
+function hasKey(env: Env, e: Engine): boolean {
+  return {
+    gemini: !!env.GEMINI_API_KEY,
+    workers_ai: !!env.AI,
+    azure: !!env.AZURE_TRANSLATOR_KEY,
+    deepl: !!env.DEEPL_API_KEY,
+    google_tr: !!env.GOOGLE_TRANSLATE_API_KEY,
+  }[e];
+}
+
 /** Dịch một lô theo chuỗi; trả về bản dịch và engine đã dùng. Hết sạch hạn mức → QuotaExhausted. */
 export async function translateChunk(env: Env, texts: string[], aiOnly: boolean): Promise<{ vi: string[]; engine: Engine }> {
   if (env.DEV_FAKE_TRANSLATE === '1') {
@@ -66,7 +77,10 @@ export async function translateChunk(env: Env, texts: string[], aiOnly: boolean)
     if (n > 3) throw new QuotaExhausted('giả lập hết hạn mức');
     return { vi: texts.map((t) => `[VI] ${t}`), engine: n === 1 ? 'gemini' : 'azure' };
   }
-  const chain = aiOnly ? AI_ENGINES : [...AI_ENGINES, ...MT_ENGINES];
+  // Chỉ xét dịch vụ đã có key, rồi xếp theo vòng 50% → 95% (xem rotationOrder).
+  const all = (aiOnly ? AI_ENGINES : [...AI_ENGINES, ...MT_ENGINES]).filter((e) => hasKey(env, e));
+  const chain = await rotationOrder(env, all);
+  if (!chain.length) throw new QuotaExhausted('Mọi dịch vụ đã dùng 95% hạn mức — chờ kỳ mới');
   let lastErr: unknown;
   let allQuota = true;
   for (const engine of chain) {

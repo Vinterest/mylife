@@ -8,6 +8,8 @@ export interface Env {
   GEMINI_DAILY_REQUESTS: string;
   WORKERS_AI_DAILY_NEURONS: string;
   QUOTA_STOP_RATIO: string;
+  /** Vòng 1 dùng mỗi key tới tỷ lệ này rồi chuyển key (mặc định 0.5). */
+  QUOTA_ROUND_RATIO?: string;
   DEV_SKIP_AUTH: string;
   // Chặng 2 · dịch máy dự phòng (để trống = bỏ qua dịch vụ đó)
   AZURE_TRANSLATOR_KEY?: string;

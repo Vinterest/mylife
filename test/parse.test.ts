@@ -2,6 +2,7 @@
 import { parseArxiv, parseFeed } from '../src/crawl/parse';
 import { matchesKeywords, normalizeTitle, scoreItem } from '../src/util';
 import { thumbSvg } from '../src/views/thumb';
+import { rotationOrder } from '../src/ai/quota';
 import { splitSql } from '../src/schema';
 import { readFileSync } from 'fs';
 
@@ -73,6 +74,20 @@ const big = '<rss><channel>' + Array.from({ length: 80 }, (_, i) => `<item><titl
 const t0 = performance.now(); const bigItems = parseFeed(big); const ms = performance.now() - t0;
 ok(bigItems.length === 60, `Feed lớn: cắt 60 bài (${bigItems.length})`);
 console.log(`     (đọc feed ${(big.length / 1024).toFixed(0)} KB mất ${ms.toFixed(1)} ms)`);
+
+// Quay vòng key: limit gemini 1000/ngày, azure 2tr, deepl 500k, google 500k
+const fakeEnv = (used: Record<string, number>) => ({
+  GEMINI_DAILY_REQUESTS: '1000', WORKERS_AI_DAILY_NEURONS: '10000', QUOTA_STOP_RATIO: '0.95', QUOTA_ROUND_RATIO: '0.5',
+  DB: { prepare: () => ({ bind: () => ({ all: async () => ({ results: Object.entries(used).map(([provider, u]) => ({ provider, used: u })) }) }) }) },
+}) as any;
+const chain = ['gemini', 'azure', 'deepl', 'google_tr'] as const;
+const rot = async (u: Record<string, number>) => (await rotationOrder(fakeEnv(u), [...chain])).join(',');
+ok((await rot({})) === 'gemini,azure,deepl,google_tr', 'Vòng 1: bắt đầu từ key đầu');
+ok((await rot({ gemini: 500 })) === 'azure,deepl,google_tr', 'Vòng 1: key 1 đủ 50% → sang key 2');
+ok((await rot({ gemini: 500, azure: 1_000_000, deepl: 250_000 })) === 'google_tr', 'Vòng 1: tới key cuối');
+ok((await rot({ gemini: 500, azure: 1_000_000, deepl: 250_000, google_tr: 250_000 })) === 'gemini,azure,deepl,google_tr', 'Vòng 2: quay lại key đầu');
+ok((await rot({ gemini: 950, azure: 1_200_000, deepl: 250_000, google_tr: 250_000 })) === 'azure,deepl,google_tr', 'Vòng 2: key 1 đủ 95% → dùng tiếp key 2');
+ok((await rot({ gemini: 950, azure: 1_900_000, deepl: 475_000, google_tr: 475_000 })) === '', 'Tất cả ≥95% → dừng hẳn');
 
 const counts = ['0001_init', '0002_sources', '0003_fulltext'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
 ok(counts.join(',') === '8,1,2', `Tách SQL thành câu lệnh (${counts.join(',')})`);

@@ -47,7 +47,7 @@ function quotaBox(q: Quota) {
   ${shown.map(
     (x) => html`<div class="kv"><span>${x.label} · ${x.scope === 'ngày' ? 'hôm nay' : 'tháng này'}</span><span class="mut">${x.used.toLocaleString('vi-VN')}/${x.limit.toLocaleString('vi-VN')} ${x.unit}</span></div><div class="bar"><i class="${x.pct >= 90 ? 'warn' : ''}" style="width:${x.pct}%"></i></div>`
   )}
-  <span class="meta">Chỉ dịch khi anh bấm “Dịch bài này” · tự dừng ở 95%</span>
+  <span class="meta">Chỉ dịch khi anh bấm “Dịch bài này” · quay vòng 50% rồi 95%, hết thì dừng</span>
   <a class="meta" href="/hoc-tap/han-muc" style="color:var(--ac);font-weight:600">Chi tiết nguồn &amp; hạn mức ›</a>
 </div>`;
 }
@@ -148,7 +148,7 @@ ${lateMin > 20
       ${[['gemini', 'Gemini (GEMINI_API_KEY)'], ['workers_ai', 'Workers AI (gắn sẵn, không cần key)'], ['azure', 'Azure (AZURE_TRANSLATOR_KEY)'], ['deepl', 'DeepL (DEEPL_API_KEY)'], ['google', 'Google Dịch (GOOGLE_TRANSLATE_API_KEY)'], ['tts', 'Giọng đọc (GOOGLE_TTS_API_KEY · Chặng 4)']].map(
         ([k, label]) => html`<div class="kv"><span>${label}</span>${p.keys[k] ? html`<span class="st ok">Đã có</span>` : html`<span class="st wait">Chưa có · bỏ qua</span>`}</div>`
       )}
-      <span class="meta">Thứ tự dịch: Gemini → Workers AI → Azure → DeepL → Google. Thiếu key nào thì bỏ qua dịch vụ đó.</span>
+      <span class="meta">Quay vòng Gemini → Workers AI → Azure → DeepL → Google: vòng 1 mỗi key dùng tới 50%, vòng 2 dùng tiếp tới 95% rồi dừng hẳn. Thiếu key nào thì bỏ qua.</span>
     </div>
     <div class="box">
       <span class="kick">Nhật ký gần đây</span>
