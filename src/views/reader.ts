@@ -69,6 +69,23 @@ function bodyHtml(v: FullTextView, lang: Lang, titleEn: string) {
   });
 }
 
+/**
+ * Đang dịch: trình duyệt gọi /dich-buoc liên tục (mỗi lượt dịch song song tối đa 8 lô ~3.500 ký tự),
+ * cập nhật thanh tiến độ, xong thì tự mở bản tiếng Việt. Không phải chờ lịch 5 phút.
+ */
+function liveProgress(id: number, pct: number, v: FullTextView) {
+  const js = `(function(){var id=${id},bar=document.getElementById('trbar'),msg=document.getElementById('trmsg'),fails=0,zero=0,t0=Date.now();
+function sec(){return Math.round((Date.now()-t0)/1000)+' giây'}
+function step(){fetch('/hoc-tap/bai/'+id+'/dich-buoc',{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'}}).then(function(r){return r.json()}).then(function(j){fails=0;var p=j.total?Math.round(j.translated*100/j.total):0;bar.style.width=p+'%';msg.textContent=p+'% · '+j.translated+'/'+j.total+' đoạn · '+sec();
+if(j.status==='translated'){msg.textContent='Xong sau '+sec()+' — đang mở bản tiếng Việt…';location.replace('/hoc-tap/bai/'+id+'?lang=vi');return}
+if(j.status==='waiting_quota'){location.reload();return}
+if(j.rateLimited){msg.textContent+=' · dịch vụ đang bận, tiếp tục sau 15 giây';setTimeout(step,15000);return}
+if(!j.done){if(j.error){msg.textContent='Lỗi: '+j.error+' — thử lại sau 10 giây';setTimeout(step,10000);return}if(++zero>=3){msg.textContent='Không dịch thêm được — tải lại trang để thử lại.';return}}else zero=0;
+step()}).catch(function(){if(++fails>5){msg.textContent='Mất kết nối — tải lại trang để dịch tiếp.';return}setTimeout(step,3000)})}
+step()})();`;
+  return html`<div class="rd-state" style="flex-direction:column;align-items:stretch;gap:.45em"><div style="display:flex;gap:.6em;align-items:center;flex-wrap:wrap"><span class="st wait">Đang dịch…</span><span class="meta" id="trmsg">${pct}% · ${v.translatedCount}/${v.translatableCount} đoạn</span></div><div style="height:6px;background:#E3EAF0;border-radius:3px;overflow:hidden"><i id="trbar" style="display:block;height:100%;width:${pct}%;background:var(--ac);transition:width .4s"></i></div><span class="meta">Có thể đọc bản gốc trong lúc chờ; dịch xong trang tự chuyển sang tiếng Việt.</span></div><script>${raw(js)}</script>`;
+}
+
 function stateBanner(it: ItemRow, v: FullTextView) {
   const r = v.row;
   const pct = v.translatableCount ? Math.round((v.translatedCount / v.translatableCount) * 100) : 0;
@@ -86,7 +103,7 @@ function stateBanner(it: ItemRow, v: FullTextView) {
     } else if (r.status === 'waiting_quota') {
       notes.push(html`<div class="rd-state warn"><span class="st wait">Chờ hạn mức</span><span class="meta" style="flex:1 1 300px">Đã hết hạn mức dịch miễn phí kỳ này. Bài đã xếp hàng, sẽ tự dịch khi có hạn mức mới; trong lúc chờ đọc bản gốc tiếng Anh.</span></div>`);
     } else {
-      notes.push(html`<div class="rd-state"><span class="st wait">Đang dịch…</span><span class="meta">Mỗi 5 phút dịch thêm một phần — tải lại trang để xem.${r.error ? ` Lỗi lần trước: ${r.error}` : ''}</span></div>`);
+      notes.push(liveProgress(it.id, pct, v));
     }
     return notes;
   }
@@ -99,7 +116,8 @@ function stateBanner(it: ItemRow, v: FullTextView) {
     notes.push(html`<div class="rd-state"><span class="st ai">Bản dịch AI</span><span class="meta">${engines.join(', ')} (gói miễn phí)${r.translated_at ? ` · ${timeAgoVi(r.translated_at)}` : ''} · thuật ngữ giữ tiếng Anh</span></div>`);
   }
   if (pct < 100 && !r.priority) notes.push(html`<div class="rd-state"><span class="meta" style="flex:1 1 260px">Đã dịch ${v.translatedCount}/${v.translatableCount} đoạn (${pct}%) — phần còn lại đang là tiếng Anh.</span><form method="post" action="/hoc-tap/bai/${it.id}/dich"><button class="btn2" type="submit">Dịch tiếp phần còn lại</button></form></div>`);
-  else if (pct < 100) notes.push(html`<div class="meta" style="margin:-.4em 0 1em">Đã dịch ${v.translatedCount}/${v.translatableCount} đoạn (${pct}%) — phần còn lại tạm hiện tiếng Anh (viền xám), sẽ dịch tiếp${r.status === 'waiting_quota' ? ' khi có hạn mức mới' : ' mỗi 5 phút'}.</div>`);
+  else if (pct < 100 && r.status === 'waiting_quota') notes.push(html`<div class="meta" style="margin:-.4em 0 1em">Đã dịch ${v.translatedCount}/${v.translatableCount} đoạn (${pct}%) — phần còn lại tạm hiện tiếng Anh (viền xám), sẽ dịch tiếp khi có hạn mức mới.</div>`);
+  else if (pct < 100 || (r.want_ai && r.status !== 'translated')) notes.push(liveProgress(it.id, pct, v));
   return notes;
 }
 

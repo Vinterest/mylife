@@ -38,7 +38,7 @@ Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 - Không vượt tường phí: trang chỉ công khai một phần thì ghi rõ. YouTube: dùng phần mô tả (lời thoại để sau).
 - Dịch toàn văn theo chuỗi miễn phí Gemini → Workers AI → Azure F0 → DeepL Free → Google, từng lô ≤ 3.500 ký tự; dịch dở được lưu và dịch tiếp lượt sau.
 - Trang đọc: Tiếng Việt / English / Song ngữ, A−/A+, mục lục, tiến độ dịch, 3 trạng thái (Bản dịch AI · Bản dịch máy · Bản gốc tiếng Anh khi hết hạn mức), nút Xếp hàng dịch, Dịch lại bằng AI, Thử lấy lại.
-- Toàn văn tự lấy về (không dịch). Chỉ dịch khi anh bấm "Dịch bài này": 2 lô đầu dịch ngay, phần còn lại dịch tiếp mỗi 5 phút. Toàn văn bài không giữ tự xóa sau 6 tháng.
+- Toàn văn tự lấy về (không dịch). Chỉ dịch khi anh bấm "Dịch bài này": trang bài gọi `/dich-buoc` liên tục, mỗi lượt 8 lô (~3.500 ký tự/lô), 4 lô song song; xong tự mở bản tiếng Việt. Lịch 5 phút chỉ dịch tiếp khi anh đã đóng trang. Toàn văn bài không giữ tự xóa sau 6 tháng.
 
 ### Key dịch máy dự phòng (tuỳ chọn — thiếu key thì bỏ qua dịch vụ đó)
 

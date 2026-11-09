@@ -1,5 +1,5 @@
 import type { Env } from '../types';
-import { geminiJson, QuotaExhausted, workersAiJson } from '../ai/providers';
+import { geminiJson, QuotaExhausted, workersAiJson, RateLimited } from '../ai/providers';
 import { azureTranslate, deeplTranslate, googleTranslate } from '../ai/mt';
 import { rotationOrder } from '../ai/quota';
 import type { Block } from './extract';
@@ -74,7 +74,8 @@ export async function translateChunk(env: Env, texts: string[], aiOnly: boolean)
   if (env.DEV_FAKE_TRANSLATE === '1') {
     // Giả lập để kiểm thử giao diện local: lô đầu "AI", các lô sau "dịch máy", lô thứ 4 trở đi hết hạn mức.
     const n = (fakeCalls = (fakeCalls ?? 0) + 1);
-    if (n > 3) throw new QuotaExhausted('giả lập hết hạn mức');
+    await new Promise((r) => setTimeout(r, 700)); // giả lập thời gian gọi API
+    if (n > 60) throw new QuotaExhausted('giả lập hết hạn mức');
     return { vi: texts.map((t) => `[VI] ${t}`), engine: n === 1 ? 'gemini' : 'azure' };
   }
   // Chỉ xét dịch vụ đã có key, rồi xếp theo vòng 50% → 95% (xem rotationOrder).
@@ -83,14 +84,17 @@ export async function translateChunk(env: Env, texts: string[], aiOnly: boolean)
   if (!chain.length) throw new QuotaExhausted('Mọi dịch vụ đã dùng 95% hạn mức — chờ kỳ mới');
   let lastErr: unknown;
   let allQuota = true;
+  let anyRate = false;
   for (const engine of chain) {
     try {
       return { vi: await CALLS[engine](env, texts), engine };
     } catch (e) {
       lastErr = e;
-      if (!(e instanceof QuotaExhausted)) allQuota = false;
+      if (e instanceof RateLimited) anyRate = true;
+      else if (!(e instanceof QuotaExhausted)) allQuota = false;
     }
   }
+  if (anyRate && allQuota) throw new RateLimited('Các dịch vụ đang giới hạn tạm thời — thử lại sau vài giây');
   if (allQuota) throw new QuotaExhausted('Hết hạn mức dịch miễn phí');
   throw lastErr;
 }

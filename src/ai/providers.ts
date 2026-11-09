@@ -1,6 +1,19 @@
 import type { Env } from '../types';
 import { addUsage, canUse, markExhausted } from './quota';
 
+/** Bị giới hạn TẠM THỜI (số yêu cầu mỗi phút) — thử dịch vụ khác hoặc thử lại sau ít giây, KHÔNG đánh dấu hết hạn mức ngày. */
+export class RateLimited extends Error {}
+
+/** Gemini 429: hết lượt trong NGÀY → đánh dấu hết hạn mức; chỉ quá số yêu cầu mỗi PHÚT → RateLimited. */
+async function gemini429(env: Env, res: Response): Promise<never> {
+  const body = await res.text().catch(() => '');
+  if (/PerDay|per day|daily/i.test(body)) {
+    await markExhausted(env, 'gemini');
+    throw new QuotaExhausted('Gemini báo hết lượt trong ngày (429)');
+  }
+  throw new RateLimited('Gemini đang giới hạn số yêu cầu mỗi phút (429)');
+}
+
 export class QuotaExhausted extends Error {}
 
 /** Gemini qua Google AI Studio (gói miễn phí). Trả về chuỗi JSON. */
@@ -17,10 +30,7 @@ export async function geminiJson(env: Env, prompt: string, maxOutputTokens = 120
     }),
   });
   await addUsage(env, 'gemini', 1);
-  if (res.status === 429) {
-    await markExhausted(env, 'gemini');
-    throw new QuotaExhausted('Gemini báo hết lượt (429)');
-  }
+  if (res.status === 429) await gemini429(env, res);
   if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data: any = await res.json();
   const text: string | undefined = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('');
@@ -42,10 +52,7 @@ export async function geminiVision(env: Env, prompt: string, b64: string, mime: 
     }),
   });
   await addUsage(env, 'gemini', 1);
-  if (res.status === 429) {
-    await markExhausted(env, 'gemini');
-    throw new QuotaExhausted('Gemini báo hết lượt (429)');
-  }
+  if (res.status === 429) await gemini429(env, res);
   if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const data: any = await res.json();
   const text: string | undefined = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('');

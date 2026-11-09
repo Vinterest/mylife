@@ -1,7 +1,7 @@
 /** Dịch máy dự phòng (gói miễn phí): Azure Translator F0, DeepL API Free, Google Cloud Translation. */
 import type { Env } from '../types';
 import { addUsage, canUse, markExhausted, type Provider } from './quota';
-import { QuotaExhausted } from './providers';
+import { QuotaExhausted, RateLimited } from './providers';
 
 const chars = (arr: string[]) => arr.reduce((n, s) => n + s.length, 0);
 
@@ -21,7 +21,8 @@ export async function azureTranslate(env: Env, texts: string[]): Promise<string[
     },
     body: JSON.stringify(texts.map((Text) => ({ Text }))),
   });
-  if (res.status === 429 || res.status === 403) { await markExhausted(env, 'azure'); throw new QuotaExhausted(`Azure ${res.status}`); }
+  if (res.status === 429) throw new RateLimited('Azure giới hạn tạm thời (429)');
+  if (res.status === 403) { await markExhausted(env, 'azure'); throw new QuotaExhausted(`Azure ${res.status}`); }
   if (!res.ok) throw new Error(`Azure HTTP ${res.status}`);
   await addUsage(env, 'azure', chars(texts));
   const data: any[] = await res.json();
@@ -35,7 +36,8 @@ export async function deeplTranslate(env: Env, texts: string[]): Promise<string[
     headers: { 'Content-Type': 'application/json', Authorization: `DeepL-Auth-Key ${env.DEEPL_API_KEY}` },
     body: JSON.stringify({ text: texts, source_lang: 'EN', target_lang: 'VI' }),
   });
-  if (res.status === 456 || res.status === 429) { await markExhausted(env, 'deepl'); throw new QuotaExhausted(`DeepL ${res.status}`); }
+  if (res.status === 429) throw new RateLimited('DeepL giới hạn tạm thời (429)');
+  if (res.status === 456) { await markExhausted(env, 'deepl'); throw new QuotaExhausted(`DeepL ${res.status}`); }
   if (!res.ok) throw new Error(`DeepL HTTP ${res.status}: ${(await res.text()).slice(0, 120)}`);
   await addUsage(env, 'deepl', chars(texts));
   const data: any = await res.json();
@@ -49,7 +51,8 @@ export async function googleTranslate(env: Env, texts: string[]): Promise<string
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ q: texts, source: 'en', target: 'vi', format: 'text' }),
   });
-  if (res.status === 403 || res.status === 429) { await markExhausted(env, 'google_tr'); throw new QuotaExhausted(`Google ${res.status}`); }
+  if (res.status === 429) throw new RateLimited('Google giới hạn tạm thời (429)');
+  if (res.status === 403) { await markExhausted(env, 'google_tr'); throw new QuotaExhausted(`Google ${res.status}`); }
   if (!res.ok) throw new Error(`Google HTTP ${res.status}`);
   await addUsage(env, 'google_tr', chars(texts));
   const data: any = await res.json();

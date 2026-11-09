@@ -8,7 +8,8 @@ import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
 import { CAPTURE_CSS, capturePage, inboxPage, notebookPage } from './views/capture';
 import { captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, processCapture, validateCapture, type NewCapture } from './capture';
-import { ensureFullText, translateItem, viewOf } from './fulltext';
+import { ensureFullText, translateStep, viewOf } from './fulltext';
+import { QuotaExhausted } from './ai/providers';
 import { JOBS, runJob } from './jobs';
 import { thumbSvg } from './views/thumb';
 import { APPLE_TOUCH_PNG_B64, ICON_192_PNG_B64, ICON_512_PNG_B64 } from './icon-png';
@@ -159,7 +160,20 @@ app.get('/hoc-tap/bai/:id', async (c) => {
   return c.html(readerPage(it, v, lang));
 });
 
-app.post('/hoc-tap/bai/:id/:action{dich|dich-ai|lay-lai}', async (c) => {
+/** Một bước dịch do trang bài gọi: tối đa 8 lô, 4 lô chạy song song. Trả tiến độ dạng JSON. */
+app.post('/hoc-tap/bai/:id{[0-9]+}/dich-buoc', async (c) => {
+  if (!sameOrigin(c)) return c.json({ ok: false, error: 'Yêu cầu không hợp lệ' }, 400);
+  const id = Number(c.req.param('id'));
+  try {
+    const r = await translateStep(c.env, id, 8, 4);
+    return c.json({ ok: true, ...r });
+  } catch (e) {
+    if (e instanceof QuotaExhausted) return c.json({ ok: true, status: 'waiting_quota', done: 0, translated: 0, total: 0, rateLimited: false });
+    return c.json({ ok: false, done: 0, translated: 0, total: 0, error: e instanceof Error ? e.message : String(e) }, 500);
+  }
+});
+
+app.post('/hoc-tap/bai/:id/:action{lay-lai|dich-ai|dich}', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
   const id = Number(c.req.param('id'));
   const action = c.req.param('action');
@@ -167,12 +181,13 @@ app.post('/hoc-tap/bai/:id/:action{dich|dich-ai|lay-lai}', async (c) => {
     await c.env.DB.prepare(`DELETE FROM fulltexts WHERE item_id = ? AND status = 'fetch_failed'`).bind(id).run();
     return c.redirect(`/hoc-tap/bai/${id}`, 303);
   }
-  if (action === 'dich') await c.env.DB.prepare('UPDATE fulltexts SET priority = 1 WHERE item_id = ?').bind(id).run();
-  if (action === 'dich-ai') await c.env.DB.prepare(`UPDATE fulltexts SET want_ai = 1, priority = 1, status = CASE WHEN status = 'translated' THEN 'partial' ELSE status END WHERE item_id = ?`).bind(id).run();
-  // Dịch ngay 2 lô đầu trong nền; phần còn lại dịch tiếp mỗi 5 phút.
-  c.executionCtx.waitUntil(translateItem(c.env, id, 2).catch(() => 0));
-  return c.redirect(`/hoc-tap/bai/${id}?lang=vi`, 303);
+  // Chỉ đánh dấu; trang bài sẽ tự gọi /dich-buoc liên tục để dịch song song (translated_at = now để lịch 5 phút không dịch trùng).
+  const now = new Date().toISOString();
+  if (action === 'dich') await c.env.DB.prepare(`UPDATE fulltexts SET priority = 1, error = NULL, translated_at = ?, status = CASE WHEN status = 'waiting_quota' THEN 'partial' ELSE status END WHERE item_id = ?`).bind(now, id).run();
+  if (action === 'dich-ai') await c.env.DB.prepare(`UPDATE fulltexts SET want_ai = 1, priority = 1, error = NULL, translated_at = ?, status = CASE WHEN status = 'translated' THEN 'partial' ELSE status END WHERE item_id = ?`).bind(now, id).run();
+  return c.redirect(`/hoc-tap/bai/${id}`, 303);
 });
+
 
 app.post('/hoc-tap/bai/:id/:action{giu|bo|da-doc}', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
