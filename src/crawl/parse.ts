@@ -151,3 +151,39 @@ export function parseArxiv(xml: string): RawItem[] {
     isPaper: true,
   }));
 }
+
+/**
+ * Sitemap (cho trang không có RSS, vd DeepSeek): lấy các URL có chứa `pathPart`.
+ * Ngày đăng: 6 số cuối URL dạng YYMMDD (news261017), hoặc YYYY/MM/DD trong URL, hoặc <lastmod>.
+ */
+export function parseSitemap(xml: string, pathPart: string): { url: string; date: Date }[] {
+  const out: { url: string; date: Date }[] = [];
+  for (const m of xml.matchAll(/<url>([\s\S]*?)<\/url>/gi)) {
+    const url = decodeXml(tag(m[1], 'loc')).trim();
+    if (!url || (pathPart && !url.includes(pathPart))) continue;
+    let date: Date | null = null;
+    const a = /(\d{2})(\d{2})(\d{2})\/?$/.exec(url);
+    const b = /(20\d{2})[/-](\d{2})[/-](\d{2})/.exec(url);
+    if (a && +a[2] >= 1 && +a[2] <= 12 && +a[3] >= 1 && +a[3] <= 31) date = new Date(Date.UTC(2000 + +a[1], +a[2] - 1, +a[3]));
+    else if (b) date = new Date(Date.UTC(+b[1], +b[2] - 1, +b[3]));
+    else if (tag(m[1], 'lastmod')) date = parseDate(tag(m[1], 'lastmod'));
+    if (date && !isNaN(date.getTime())) out.push({ url, date });
+  }
+  return out.sort((x, y) => y.date.getTime() - x.date.getTime());
+}
+
+/** Tiêu đề, mô tả, ảnh của một trang (og:… hoặc <title>), bỏ hậu tố " | Tên trang". */
+export function parsePageMeta(html: string, base: string): { title: string; description: string; image?: string } {
+  const head = html.slice(0, 200_000);
+  const meta = (prop: string) => {
+    for (const t of head.match(/<meta\b[^>]*>/gi) ?? []) {
+      if (attr(t, 'property') === prop || attr(t, 'name') === prop) return attr(t, 'content');
+    }
+    return '';
+  };
+  const title = stripHtml(meta('og:title') || tag(head, 'title')).replace(/\s+[|–—-]\s+[^|–—-]+$/, '');
+  const img = meta('og:image');
+  let image: string | undefined;
+  try { image = img ? new URL(img, base).toString() : undefined; } catch { image = undefined; }
+  return { title, description: stripHtml(meta('og:description') || meta('description')), image };
+}

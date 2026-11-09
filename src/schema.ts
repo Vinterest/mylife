@@ -2,6 +2,7 @@ import type { Env } from './types';
 import m1 from '../migrations/0001_init.sql';
 import m2 from '../migrations/0002_sources.sql';
 import m3 from '../migrations/0003_fulltext.sql';
+import m4 from '../migrations/0004_sources_ai_labs.sql';
 
 /** Tách file SQL thành từng câu lệnh: bỏ chú thích "--", tách theo dấu ";" cuối câu. */
 export function splitSql(sql: string): string[] {
@@ -24,7 +25,7 @@ export async function ensureSchema(env: Env): Promise<void> {
   if (ready) return;
   const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('sources','items','daily_picks','quota_usage','jobs_log','fulltexts')").first<{ n: number }>();
   if ((row?.n ?? 0) < 6) {
-    for (const file of [m1, m2, m3]) {
+    for (const file of [m1, m2, m3, m4]) {
       const stmts = splitSql(file).map((s) => env.DB.prepare(s));
       if (stmts.length) await env.DB.batch(stmts);
     }
@@ -45,5 +46,8 @@ export async function ensureSchema(env: Env): Promise<void> {
       env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_items_read ON items(read_at)'),
     ]);
   }
+  // Nguồn bổ sung (khi DB đã tạo từ trước): INSERT OR IGNORE nên chạy lại cũng an toàn.
+  const extra = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources WHERE id = 'sm-deepseek'").first<{ n: number }>();
+  if (!extra?.n) await env.DB.batch(splitSql(m4).map((st) => env.DB.prepare(st)));
   ready = true;
 }

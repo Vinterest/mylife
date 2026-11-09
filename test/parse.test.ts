@@ -1,5 +1,5 @@
 // Kiểm tra bộ đọc feed, ảnh đại diện, lọc từ khóa, chấm điểm, tách SQL — chạy: npm test
-import { parseArxiv, parseFeed } from '../src/crawl/parse';
+import { parseArxiv, parseFeed, parsePageMeta, parseSitemap } from '../src/crawl/parse';
 import { matchesKeywords, normalizeTitle, scoreItem } from '../src/util';
 import { thumbSvg } from '../src/views/thumb';
 import { rotationOrder } from '../src/ai/quota';
@@ -89,8 +89,14 @@ ok((await rot({ gemini: 500, azure: 1_000_000, deepl: 250_000, google_tr: 250_00
 ok((await rot({ gemini: 950, azure: 1_200_000, deepl: 250_000, google_tr: 250_000 })) === 'azure,deepl,google_tr', 'Vòng 2: key 1 đủ 95% → dùng tiếp key 2');
 ok((await rot({ gemini: 950, azure: 1_900_000, deepl: 475_000, google_tr: 475_000 })) === '', 'Tất cả ≥95% → dừng hẳn');
 
-const counts = ['0001_init', '0002_sources', '0003_fulltext'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
-ok(counts.join(',') === '8,1,2', `Tách SQL thành câu lệnh (${counts.join(',')})`);
+const SM = `<urlset><url><loc>https://api-docs.deepseek.com/news/news261017</loc></url><url><loc>https://api-docs.deepseek.com/news/news0725</loc></url><url><loc>https://api-docs.deepseek.com/news/news260910</loc></url><url><loc>https://api-docs.deepseek.com/quick_start</loc></url></urlset>`;
+const sm = parseSitemap(SM, '/news/news');
+ok(sm.length === 2 && sm[0].url.endsWith('news261017') && sm[0].date.toISOString().startsWith('2026-10-17'), `Sitemap DeepSeek: ngày từ URL, mới trước (${sm.map((x) => x.date.toISOString().slice(0, 10)).join(',')})`);
+const pm = parsePageMeta('<html><head><title>DeepSeek-V4.1 Release | DeepSeek API Docs</title><meta property="og:description" content="🚀 Here!"><meta property="og:image" content="/img/card.jpeg"></head>', 'https://api-docs.deepseek.com/news/x');
+ok(pm.title === 'DeepSeek-V4.1 Release' && pm.description === '🚀 Here!' && pm.image === 'https://api-docs.deepseek.com/img/card.jpeg', `Đọc tiêu đề/mô tả/ảnh trang (${pm.title})`);
+
+const counts = ['0001_init', '0002_sources', '0003_fulltext', '0004_sources_ai_labs'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
+ok(counts.join(',') === '8,1,2,1', `Tách SQL thành câu lệnh (${counts.join(',')})`);
 ok(splitSql('-- a; b\nCREATE TABLE x (a TEXT); -- c;\nINSERT INTO x VALUES (1);').length === 2, 'Tách SQL bỏ dấu ; trong chú thích');
 
 console.log(fail ? `\n${fail} kiểm tra lỗi` : '\nTất cả kiểm tra đạt');

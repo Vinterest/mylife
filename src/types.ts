@@ -27,7 +27,7 @@ export type Channel = 'ai' | 'embodied' | 'robotics' | 'tcnh';
 export interface SourceRow {
   id: string;
   name: string;
-  kind: 'arxiv' | 'rss';
+  kind: 'arxiv' | 'rss' | 'sitemap';
   url: string;
   channel: Channel;
   weight: number;
