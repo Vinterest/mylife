@@ -95,15 +95,13 @@ app.use('/hoc-tap*', async (c, next) => {
   if (c.req.method !== 'GET' || !c.res.headers.get('Content-Type')?.includes('text/html')) return;
   const body = await c.res.text();
   if (!body.includes('<!--cnt:')) { c.res = new Response(body, c.res); return; }
-  const startVn = new Date(`${vnDay()}T00:00:00+07:00`).toISOString();
-  // Số hiện = bài mới về hôm nay − bài anh đã bấm Đã đọc hôm nay trong kênh đó (kể cả bài về từ hôm trước), tối thiểu 0.
+  // Số hiện = TỔNG số bài của kênh cộng dồn từ trước tới nay − số bài anh đã bấm Đã đọc (không reset theo ngày).
+  // Bài "Không quan tâm" không tính. Bài mới về thì số tăng, đọc bài nào thì số giảm bài đó.
   const { results } = await c.env.DB.prepare(
-    `SELECT channel,
-            SUM(CASE WHEN fetched_at >= ?1 AND dismissed = 0 THEN 1 ELSE 0 END) AS fresh,
-            SUM(CASE WHEN read_at >= ?1 THEN 1 ELSE 0 END) AS readToday
-     FROM items WHERE fetched_at >= ?1 OR read_at >= ?1 GROUP BY channel`
-  ).bind(startVn).all<{ channel: string; fresh: number; readToday: number }>();
-  const cnt = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.fresh - r.readToday)]));
+    `SELECT channel, COUNT(*) AS total, SUM(CASE WHEN read_at IS NOT NULL THEN 1 ELSE 0 END) AS readN
+     FROM items WHERE dismissed = 0 GROUP BY channel`
+  ).all<{ channel: string; total: number; readN: number }>();
+  const cnt: Record<string, number> = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.total - r.readN)]));
   const inbox = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures WHERE archived = 0').first<{ n: number }>().catch(() => null);
   cnt.inbox = inbox?.n ?? 0;
   // Sổ tay = mục nhặt đã lưu + bài đã Giữ (không tính bài tạo từ Hộp nhặt, vì đã tính ở mục nhặt) — giống trang Sổ tay.
@@ -115,7 +113,7 @@ app.use('/hoc-tap*', async (c, next) => {
   cnt.read = read?.n ?? 0;
   const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
     const n = cnt[ch] ?? 0;
-    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : ch === 'notes' ? 'Số mục trong Sổ tay' : ch === 'read' ? 'Tổng số bài đã đọc' : 'Bài mới về hôm nay trừ bài đã đọc hôm nay';
+    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : ch === 'notes' ? 'Số mục trong Sổ tay' : ch === 'read' ? 'Tổng số bài đã đọc' : 'Tổng số bài của kênh trừ số bài đã đọc';
     return `<span class="cnt${n ? '' : ' z'}" title="${tip}">(${n})</span>`;
   });
   const headers = new Headers(c.res.headers);
