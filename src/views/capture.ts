@@ -5,6 +5,7 @@ import { CHANNELS, CHANNEL_ORDER, timeAgoVi } from '../util';
 import { g2Sub, html, page } from './layout';
 
 export const CAPTURE_CSS = `
+.drop{padding:.7em}
 .capd>summary{list-style:none;width:100%;box-sizing:border-box;margin-bottom:.6em}
 .capd>summary::-webkit-details-marker{display:none}
 .capd[open]>summary{display:none}
@@ -39,6 +40,7 @@ export const CAPTURE_CSS = `
 .imgs img{max-width:100%;max-height:80vh;width:auto;border-radius:6px;border:1px solid var(--line);align-self:flex-start}
 .ocrbox{white-space:pre-wrap;line-height:1.6;background:#F7F9FA;border:1px solid var(--line);border-radius:6px;padding:.8em 1em;font-size:.95em}
 @media (max-width:640px){.cc .th{width:96px;order:2}}
+@media (max-width:640px){.dropk{display:none}.cap-form{gap:.55em}.cap-form label{font-size:.88em}.chans label{padding:.25em .65em}.prevs figure{width:64px;height:64px}}
 `;
 
 const chName = (c: string) => CHANNELS[c as keyof typeof CHANNELS]?.short ?? c;
@@ -91,6 +93,8 @@ drop.addEventListener('dragleave',function(){drop.classList.remove('over')});
 drop.addEventListener('drop',function(e){e.preventDefault();drop.classList.remove('over');add(e.dataTransfer.files)});
 document.addEventListener('paste',function(e){if(e.clipboardData&&e.clipboardData.files.length)add(e.clipboardData.files)});
 var pb=document.getElementById('pastebtn');if(pb&&navigator.clipboard&&navigator.clipboard.readText){pb.onclick=function(){navigator.clipboard.readText().then(function(t){var m=/https?:\\/\\/\\S+/.exec(t||'');if(m)document.getElementById('capurl').value=m[0];else{msg.className='cap-msg err';msg.textContent='Bộ nhớ tạm không có link.'}}).catch(function(){msg.className='cap-msg err';msg.textContent='Trình duyệt chưa cho đọc bộ nhớ tạm — hãy nhấn giữ ô link rồi chọn Dán.'})}}else if(pb){pb.style.display='none'}
+var det=f.closest('details');function toForm(){if(window.innerWidth<640)setTimeout(function(){window.scrollTo({top:det.getBoundingClientRect().top+window.scrollY-8,behavior:'smooth'})},50)}
+if(det){if(det.open)toForm();det.addEventListener('toggle',function(){if(det.open)toForm()})}
 f.addEventListener('submit',function(e){e.preventDefault();var fd=new FormData(f);fd.delete('image');files.forEach(function(x,i){fd.append('image',x.blob,'anh-'+(i+1)+'.jpg')});
 btn.disabled=true;msg.className='cap-msg';msg.textContent='Đang gửi…';
 fetch(f.action,{method:'POST',body:fd,headers:{Accept:'application/json'},credentials:'same-origin'}).then(function(r){return r.json().catch(function(){return {ok:false,error:'Máy chủ trả lỗi '+r.status}})}).then(function(j){if(j.ok){location.href=j.url}else{btn.disabled=false;msg.className='cap-msg err';msg.textContent=j.error||'Gửi chưa được'}}).catch(function(){btn.disabled=false;msg.className='cap-msg err';msg.textContent='Mất mạng — thử gửi lại.'})});
@@ -98,14 +102,13 @@ fetch(f.action,{method:'POST',body:fd,headers:{Accept:'application/json'},creden
 
 function captureForm(open: boolean) {
   return html`<details class="capd" ${open ? 'open' : ''}><summary class="btn">+ Nhặt bài mới</summary><form id="capf" class="box cap-form" method="post" action="/hoc-tap/hop-nhat" enctype="multipart/form-data">
-  <span class="kick">Nhặt bài mới</span>
   <div><label>1 · Ảnh chụp màn hình <span class="meta">(tối đa 6 ảnh · tự nén trước khi gửi)</span></label>
     <input id="capimg" type="file" name="image" accept="image/*" multiple hidden>
-    <div id="drop" class="drop" role="button" tabindex="0"><b>Chọn ảnh hoặc chụp</b><br><span class="meta">trên máy tính: kéo thả hoặc Ctrl+V để dán ảnh</span></div>
+    <div id="drop" class="drop" role="button" tabindex="0"><b>Chọn ảnh hoặc chụp</b><span class="meta dropk"> · máy tính: kéo thả hoặc Ctrl+V</span></div>
     <div id="prevs" class="prevs" style="margin-top:.5em"></div></div>
   <div><label for="capurl">2 · Link đường dẫn <span class="meta">(Facebook, YouTube, báo, web…)</span></label>
     <div class="cap-row"><input id="capurl" type="url" name="url" inputmode="url" placeholder="https://…" autocomplete="off"><button id="pastebtn" class="btn2" type="button">Dán</button></div></div>
-  <div><label for="capnote">3 · Nội dung <span class="meta">(dán nguyên bài Facebook hoặc tự ghi)</span></label><textarea id="capnote" name="note" rows="8" style="min-height:10em" placeholder="Dán nội dung bài viết vào đây…"></textarea></div>
+  <div><label for="capnote">3 · Nội dung <span class="meta">(dán nguyên bài Facebook hoặc tự ghi)</span></label><textarea id="capnote" name="note" rows="2" style="min-height:0;height:3.6em" placeholder="Dán nội dung bài viết vào đây…"></textarea></div>
   <div><label for="captitle">4 · Tiêu đề <span class="meta">(không bắt buộc — để trống thì MyLife tự đặt)</span></label><input id="captitle" type="text" name="title" maxlength="300" placeholder="Tự đặt tiêu đề cho mục này…" autocomplete="off" style="width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:.6em .7em;border:1px solid #C9D1DA;border-radius:6px;background:#fff;color:inherit"></div>
   <div><label>Kênh</label><div class="chans">${CHANNEL_ORDER.map((c, i) => html`<label><input type="radio" name="channel" value="${c}" ${i === 0 ? 'checked' : ''}>${CHANNELS[c].short}</label>`)}</div></div>
   <div style="display:flex;gap:.8em;align-items:center;flex-wrap:wrap"><button id="capbtn" class="btn" type="submit">Lưu vào Hộp nhặt</button><span id="capmsg" class="cap-msg" role="status"></span></div>
