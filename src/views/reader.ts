@@ -2,6 +2,7 @@ import type { ItemRow } from '../types';
 import type { FullTextView } from '../fulltext';
 import { CHANNELS, timeAgoVi } from '../util';
 import { g2Sub, html, page, raw } from './layout';
+import { SPEAK_BAR, SPEAK_JS, speakButton } from './speak';
 
 export type Lang = 'vi' | 'en' | 'bi';
 
@@ -99,7 +100,7 @@ function stateBanner(it: ItemRow, v: FullTextView) {
   if (v.translatableCount === 0) return notes;
   if (v.translatedCount === 0) {
     if (!r.priority) {
-      notes.push(html`<div class="rd-state"><span class="st" style="background:#F2F4F6;color:#3E4A56">Bản gốc tiếng Anh</span><span class="meta" style="flex:1 1 260px">MyLife chỉ dịch khi anh yêu cầu, để tiết kiệm hạn mức miễn phí.</span><form method="post" action="/hoc-tap/bai/${it.id}/dich"><button class="btn" type="submit">Dịch bài này</button></form></div>`);
+      notes.push(html`<div class="rd-state"><span class="st" style="background:#F2F4F6;color:#3E4A56">Bản gốc tiếng Anh</span><span class="meta" style="flex:1 1 260px">MyLife chỉ dịch khi anh yêu cầu, để tiết kiệm hạn mức miễn phí.</span><span style="display:flex;gap:.5em;flex-wrap:wrap"><form method="post" action="/hoc-tap/bai/${it.id}/dich"><button class="btn" type="submit">Dịch bài này</button></form>${raw(speakButton())}</span></div>`);
     } else if (r.status === 'waiting_quota') {
       notes.push(html`<div class="rd-state warn"><span class="st wait">Chờ hạn mức</span><span class="meta" style="flex:1 1 300px">Đã hết hạn mức dịch miễn phí kỳ này. Bài đã xếp hàng, sẽ tự dịch khi có hạn mức mới; trong lúc chờ đọc bản gốc tiếng Anh.</span></div>`);
     } else {
@@ -134,7 +135,7 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
     <div class="rd-tools">
       <div class="seg" role="group" aria-label="Ngôn ngữ">${langLink('vi', 'Tiếng Việt')}${langLink('en', 'English')}${langLink('bi', 'Song ngữ')}</div>
       <div class="seg" role="group" aria-label="Cỡ chữ"><button type="button" onclick="mlFs(-1)" aria-label="Chữ nhỏ hơn">A−</button><button type="button" onclick="mlFs(1)" aria-label="Chữ lớn hơn">A+</button></div>
-      <span class="meta">Nghe bài · sắp có (Chặng 4)</span>
+      ${raw(speakButton())}
       <span style="margin-left:auto;display:flex;gap:.5em">
         <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/da-doc"><input type="hidden" name="back" value="${it.read_at ? `/hoc-tap/bai/${it.id}?lang=${lang}` : '/hoc-tap'}"><button class="${it.read_at ? 'btn2' : 'btn'}" type="submit">${it.read_at ? '↩ Chưa đọc' : '✓ Đã đọc'}</button></form>
         <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="/hoc-tap/bai/${it.id}?lang=${lang}"><button class="btn2" type="submit">${it.kept ? 'Đã giữ ✓' : 'Giữ bài'}</button></form>
@@ -166,6 +167,8 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
     <div class="box"><span class="kick">Tiến độ dịch</span><span>${v.translatedCount}/${v.translatableCount} đoạn</span><div class="bar"><i style="width:${v.translatableCount ? Math.round((v.translatedCount / v.translatableCount) * 100) : 0}%"></i></div></div>
   </aside>
 </section>
+${raw(SPEAK_BAR)}
+<script>${raw(SPEAK_JS)}</script>
 <script>
 (function(){var k='ml-fs',r=document.getElementById('rd');function g(){try{return parseFloat(localStorage.getItem(k))||1}catch(e){return 1}}
 function s(v){r.style.setProperty('--fs',v);try{localStorage.setItem(k,v)}catch(e){}}

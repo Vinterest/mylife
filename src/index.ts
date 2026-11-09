@@ -6,6 +6,7 @@ import { allSources, getItem, latestByChannel, livePicks, readItems, recentJobs,
 import { channelPage, homePage, quotaPage, readPage, soonPage } from './views/pages';
 import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
+import { SPEAK_CSS } from './views/speak';
 import { CAPTURE_CSS, capturePage, inboxPage, notebookPage } from './views/capture';
 import { captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, processCapture, validateCapture, type NewCapture } from './capture';
 import { ensureFullText, translateStep, viewOf } from './fulltext';
@@ -23,7 +24,7 @@ const app = new Hono<{ Bindings: Env }>();
 const pngBody = (b64: string) => Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
 const IMG_CACHE = 'public, max-age=604800';
 
-app.get('/app.css', (c) => c.body(CSS + READER_CSS + CAPTURE_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }));
+app.get('/app.css', (c) => c.body(CSS + READER_CSS + CAPTURE_CSS + SPEAK_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }));
 // Logo "Sao dẫn đường" (phương án 5): xem src/brand.ts
 app.get('/icon.svg', (c) => c.body(appIconSvg(true), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': IMG_CACHE }));
 app.get('/favicon.svg', (c) => c.body(FAVICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': IMG_CACHE }));
