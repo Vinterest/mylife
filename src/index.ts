@@ -108,9 +108,11 @@ app.use('/hoc-tap*', async (c, next) => {
     `SELECT (SELECT COUNT(*) FROM captures WHERE kept = 1) + (SELECT COUNT(*) FROM items WHERE kept = 1 AND source_id <> 'manual') AS n`
   ).first<{ n: number }>().catch(() => null);
   cnt.notes = notes?.n ?? 0;
+  const read = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM items WHERE read_at IS NOT NULL').first<{ n: number }>().catch(() => null);
+  cnt.read = read?.n ?? 0;
   const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
     const n = cnt[ch] ?? 0;
-    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : ch === 'notes' ? 'Số mục trong Sổ tay' : 'Bài mới về hôm nay trừ bài đã đọc hôm nay';
+    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : ch === 'notes' ? 'Số mục trong Sổ tay' : ch === 'read' ? 'Tổng số bài đã đọc' : 'Bài mới về hôm nay trừ bài đã đọc hôm nay';
     return `<span class="cnt${n ? '' : ' z'}" title="${tip}">(${n})</span>`;
   });
   const headers = new Headers(c.res.headers);

@@ -105,16 +105,14 @@ export const TABS: { id: string; label: string; href: string; color?: string; li
 export function g2Sub(cur: string): H {
   const items: { id: string; label: string; href: string; live: boolean }[] = [
     { id: 'today', label: 'Hôm nay', href: '/hoc-tap', live: true },
-    { id: 'inbox', label: 'Hộp nhặt', href: '/hoc-tap/hop-nhat', live: true },
     ...CHANNEL_ORDER.map((c) => ({ id: c, label: CHANNELS[c].short, href: `/hoc-tap/kenh/${CHANNELS[c].slug}`, live: true })),
-    { id: 'news', label: 'Bản tin', href: '/sap-co/ban-tin', live: false },
+    { id: 'inbox', label: 'Hộp nhặt', href: '/hoc-tap/hop-nhat', live: true },
     { id: 'read', label: 'Đã đọc', href: '/hoc-tap/da-doc', live: true },
     { id: 'notes', label: 'Sổ tay', href: '/hoc-tap/so-tay', live: true },
-    { id: 'listen', label: 'Nghe', href: '/sap-co/nghe', live: false },
     { id: 'quota', label: 'Nguồn & hạn mức', href: '/hoc-tap/han-muc', live: true },
   ];
   return html`<nav class="wrap sub" aria-label="Học tập AI">${items.map(
-    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) || i.id === 'inbox' || i.id === 'notes' ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
+    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) || ['inbox', 'read', 'notes'].includes(i.id) ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
   )}</nav>`;
 }
 
