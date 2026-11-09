@@ -111,9 +111,13 @@ export function g2Sub(cur: string): H {
     { id: 'notes', label: 'Sổ tay', href: '/hoc-tap/so-tay', live: true },
     { id: 'quota', label: 'Nguồn & hạn mức', href: '/hoc-tap/han-muc', live: true },
   ];
+  // Nút Tìm kiếm: mở trang tìm, chọn sẵn phạm vi theo mục đang xem.
+  const scope = CHANNEL_ORDER.includes(cur as Channel) ? cur : ({ inbox: 'hop-nhat', read: 'da-doc', notes: 'so-tay' } as Record<string, string>)[cur];
+  const searchHref = `/hoc-tap/tim${scope ? `?o=${scope}` : ''}`;
   return html`<nav class="wrap sub" aria-label="Học tập AI">${items.map(
     (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) || ['inbox', 'read', 'notes'].includes(i.id) ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
-  )}</nav>`;
+  )}<a class="srchlink${cur === 'search' ? ' cur' : ''}" href="${searchHref}" title="Tìm kiếm (phím /)">${raw('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>')}Tìm kiếm</a></nav>
+<script>document.addEventListener('keydown',function(e){if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||'')&&!e.metaKey&&!e.ctrlKey){e.preventDefault();location.href=${raw(JSON.stringify(searchHref))}}})</script>`;
 }
 
 export function page(opts: { title: string; tab: string; sub?: H; body: H; badgeCount?: number }): H {
@@ -131,7 +135,7 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=13">
+<link rel="stylesheet" href="/app.css?v=14">
 <title>${opts.title} · MyLife</title>
 </head>
 <body>

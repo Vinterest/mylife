@@ -48,7 +48,7 @@ export const CAPTURE_CSS = `
 
 const chName = (c: string) => CHANNELS[c as keyof typeof CHANNELS]?.short ?? c;
 
-function capThumb(c: CaptureRow) {
+export function capThumb(c: CaptureRow) {
   const first = c.img_ids?.split(',')[0];
   const fb = `/thumb/manual.svg?ch=${c.channel}`;
   const src = first ? `/hoc-tap/anh/${first}` : c.image_url || fb;
