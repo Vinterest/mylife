@@ -2,10 +2,20 @@ import type { ItemRow, SourceRow } from '../types';
 import { CHANNELS, CHANNEL_ORDER, timeAgoVi } from '../util';
 import { g2Sub, html, page } from './layout';
 import type { quotaSnapshot } from '../ai/quota';
+import type { SortMode } from '../db';
 
 type Quota = Awaited<ReturnType<typeof quotaSnapshot>>;
 
 const title = (it: ItemRow) => it.title_en;
+
+/** Bài vừa về MyLife trong 3 giờ qua. */
+const isNew = (it: ItemRow) => Date.now() - new Date(it.fetched_at).getTime() < 3 * 3600000;
+
+/** Nút chuyển cách xếp: mới nhất trước / điểm cao trước. */
+function sortSwitch(base: string, sort: SortMode) {
+  const sep = base.includes('?') ? '&' : '?';
+  return html`<span class="seg sm" role="group" aria-label="Cách xếp"><a class="${sort === 'moi' ? 'on' : ''}" href="${base}">Mới nhất</a><a class="${sort === 'diem' ? 'on' : ''}" href="${base}${sep}xep=diem">Điểm cao</a></span>`;
+}
 
 function snippet(it: ItemRow) {
   const a = (it.abstract_en ?? '').slice(0, 240);
@@ -34,7 +44,7 @@ function readRow(it: ItemRow, back: string) {
   ${thumb(it)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
     <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}</span>
-    <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${title(it)}</a>
+    <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${isNew(it) ? html`<span class="new">Mới</span> ` : ''}${title(it)}</a>
     <p class="sum" lang="en">${snippet(it)}</p>
     ${itemActions(it, back)}
   </div>
@@ -53,14 +63,14 @@ function quotaBox(q: Quota) {
 </div>`;
 }
 
-export function homePage(p: { picks: ItemRow[]; byChannel: Record<string, ItemRow[]>; quota: Quota; weekly: Record<string, number> }) {
+export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Record<string, ItemRow[]>; quota: Quota; weekly: Record<string, number> }) {
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>Đáng đọc hôm nay · ${p.picks.length} bài</h2><span class="meta">chọn lúc 06:30 · xếp theo điểm</span></div>
+    <div class="sh"><h2>Đáng đọc · ${p.picks.length} bài</h2><span class="meta">72 giờ qua · cập nhật mỗi lần mở trang</span>${sortSwitch('/hoc-tap', p.sort)}</div>
     ${p.picks.length
       ? p.picks.map((it) => readRow(it, '/hoc-tap'))
-      : html`<div class="empty">Chưa có bài cho hôm nay. Hệ thống chọn lúc 06:30; nếu vừa cài đặt, vào <a href="/hoc-tap/han-muc" style="color:var(--ac)">Nguồn &amp; hạn mức</a> và bấm “Chạy ngay”.</div>`}
+      : html`<div class="empty">Chưa có bài chưa đọc trong 72 giờ qua. Nếu vừa cài đặt, vào <a href="/hoc-tap/han-muc" style="color:var(--ac)">Nguồn &amp; hạn mức</a> và bấm “Crawl lại tất cả RSS”.</div>`}
   </div>
   <aside class="colside">
     <div class="box">
@@ -91,17 +101,18 @@ export function homePage(p: { picks: ItemRow[]; byChannel: Record<string, ItemRo
   return page({ title: 'Học tập AI', tab: 'g2', sub: g2Sub('today'), body });
 }
 
-export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[]; pageNo: number; hasMore: boolean }) {
+export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[]; pageNo: number; hasMore: boolean; sort: SortMode }) {
   const ch = CHANNELS[p.channel];
-  const back = `/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo}`;
+  const xq = p.sort === 'diem' ? '&xep=diem' : '';
+  const back = `/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo}${xq}`;
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>${ch.name}</h2><span class="meta">mới nhất trước · trang ${p.pageNo}</span></div>
+    <div class="sh"><h2>${ch.name}</h2><span class="meta">trang ${p.pageNo}</span>${sortSwitch(`/hoc-tap/kenh/${ch.slug}`, p.sort)}</div>
     ${p.items.length ? p.items.map((it) => readRow(it, back)) : html`<div class="empty">Chưa có bài trong kênh này.</div>`}
     <div class="pager">
-      ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo - 1}">‹ Mới hơn</a>` : html`<span></span>`}
-      ${p.hasMore ? html`<a class="btn2" href="/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo + 1}">Cũ hơn ›</a>` : ''}
+      ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo - 1}${xq}">‹ Mới hơn</a>` : html`<span></span>`}
+      ${p.hasMore ? html`<a class="btn2" href="/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo + 1}${xq}">Cũ hơn ›</a>` : ''}
     </div>
   </div>
 </section>`;
@@ -155,7 +166,6 @@ ${lateMin > 20
         ['tick', 'Chạy 1 nhịp ngay'],
         ['crawl-rss', 'Crawl lại tất cả RSS'],
         ['crawl-arxiv', 'Crawl lại arXiv'],
-        ['picks', 'Chọn lại 50 bài Đáng đọc'],
       ].map(([id, label]) => html`<form method="post" action="/admin/run/${id}"><button class="btn2" style="width:100%" type="submit">${label}</button></form>`)}
     </div>
     <div class="box">

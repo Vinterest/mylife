@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from './types';
 import { quotaSnapshot } from './ai/quota';
-import { makePicks } from './picks';
-import { allSources, getItem, latestByChannel, picksForToday, readItems, recentJobs, weeklyCounts } from './db';
+import { allSources, getItem, latestByChannel, livePicks, readItems, recentJobs, weeklyCounts, type SortMode } from './db';
 import { channelPage, homePage, quotaPage, readPage, soonPage } from './views/pages';
 import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
@@ -97,25 +96,25 @@ function sameOrigin(c: { req: { header: (n: string) => string | undefined; url: 
 /* ---------- Trang ---------- */
 app.get('/', (c) => c.redirect('/hoc-tap'));
 
+const sortOf = (q: string | undefined): SortMode => (q === 'diem' ? 'diem' : 'moi');
+
 app.get('/hoc-tap', async (c) => {
   const env = c.env;
-  let picks = await picksForToday(env);
-  if (!picks.length) {
-    await makePicks(env); // lần đầu trong ngày chưa có lịch chọn → chọn ngay
-    picks = await picksForToday(env);
-  }
+  const sort = sortOf(c.req.query('xep'));
+  const picks = await livePicks(env, sort);
   const byChannel: Record<string, Awaited<ReturnType<typeof latestByChannel>>> = {};
   const pickIds = new Set(picks.map((p) => p.id));
   for (const ch of CHANNEL_ORDER) byChannel[ch] = (await latestByChannel(env, ch, 60)).filter((i) => !pickIds.has(i.id)).slice(0, 4);
-  return c.html(homePage({ picks, byChannel, quota: await quotaSnapshot(env), weekly: await weeklyCounts(env) }));
+  return c.html(homePage({ picks, sort, byChannel, quota: await quotaSnapshot(env), weekly: await weeklyCounts(env) }));
 });
 
 app.get('/hoc-tap/kenh/:slug', async (c) => {
   const ch = channelBySlug(c.req.param('slug'));
   if (!ch) return c.notFound();
+  const sort = sortOf(c.req.query('xep'));
   const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
-  const rows = await latestByChannel(c.env, ch, 21, (pageNo - 1) * 20);
-  return c.html(channelPage({ channel: ch, items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20 }));
+  const rows = await latestByChannel(c.env, ch, 21, (pageNo - 1) * 20, sort);
+  return c.html(channelPage({ channel: ch, items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20, sort }));
 });
 
 app.get('/hoc-tap/bai/:id', async (c) => {

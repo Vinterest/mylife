@@ -1,13 +1,11 @@
 import type { Env } from './types';
 import { crawlSource, markDue, nextDueSource } from './crawl';
 import { cleanupFullTexts, fetchNextFullText, translateRequested } from './fulltext';
-import { makePicks } from './picks';
-import { vnDay } from './util';
 
 /*
  * Gói Workers miễn phí: mỗi lượt chạy tối đa 50 truy vấn D1, 50 yêu cầu mạng và ~10 ms CPU.
  * Vì vậy thay vì 1 lượt lớn crawl hết 14 nguồn, mỗi 5 phút chạy một "nhịp" nhỏ:
- *   1. Chọn 50 bài Đáng đọc nếu đã qua 06:30 mà hôm nay chưa chọn (+ dọn bài cũ).
+ *   1. Dọn toàn văn cũ (mỗi ngày một lần, lúc 06:30). Đáng đọc tính lại mỗi lần mở trang.
  *   2. Crawl đúng 1 nguồn đến hạn (RSS mỗi 6 giờ, arXiv sau 06:00 hằng ngày).
  *   3. Dịch tiếp tối đa 2 lô cho bài anh đã bấm "Dịch bài này".
  *   4. Tự lấy toàn văn (không dịch) cho 1 bài.
@@ -32,12 +30,10 @@ function vnMinutes(d = new Date()): number {
 
 export async function tick(env: Env): Promise<string> {
   const notes: string[] = [];
-  await step(notes, 'Đáng đọc', async () => {
-    if (vnMinutes() < 6 * 60 + 30) return '';
-    const day = vnDay();
-    const has = await env.DB.prepare('SELECT 1 FROM daily_picks WHERE day = ? LIMIT 1').bind(day).first();
-    if (has) return '';
-    return `${await makePicks(env, day)} · ${await cleanupFullTexts(env)}`;
+  await step(notes, 'Dọn dẹp', async () => {
+    // Mỗi ngày một lần, nhịp lúc 06:30–06:34 giờ VN.
+    const m = vnMinutes();
+    return m >= 6 * 60 + 30 && m < 6 * 60 + 35 ? cleanupFullTexts(env) : '';
   });
   await step(notes, 'Crawl', async () => {
     const src = await nextDueSource(env);
@@ -53,7 +49,6 @@ export const JOBS: Record<string, (env: Env) => Promise<string>> = {
   tick,
   'crawl-rss': async (env) => `${await markDue(env, 'rss')}\n${await tick(env)}`,
   'crawl-arxiv': async (env) => `${await markDue(env, 'arxiv')}\n${await tick(env)}`,
-  picks: async (env) => `${await makePicks(env, vnDay())}\n${await cleanupFullTexts(env)}`,
 };
 
 /** Ghi nhật ký lúc bắt đầu (ok = 0, "đang chạy…"), cập nhật khi xong. Lượt bị ngắt giữa chừng vẫn để lại dấu. */

@@ -42,7 +42,8 @@ async function saveItems(env: Env, src: SourceRow, raw: RawItem[]): Promise<numb
     const key = normalizeTitle(it.title);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const publishedAt = it.published.toISOString();
+    // Ngày đăng ở tương lai (lỗi feed) sẽ chiếm đầu danh sách mãi → không cho vượt quá lúc lấy về.
+    const publishedAt = new Date(Math.min(it.published.getTime(), now.getTime())).toISOString();
     const score = scoreItem({ channel: src.channel, publishedAt, text: `${it.title} ${it.abstract}`, sourceWeight: src.weight }, now);
     stmts.push(
       env.DB.prepare(

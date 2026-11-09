@@ -1,20 +1,41 @@
 import type { Channel, Env, ItemRow, SourceRow } from './types';
-import { vnDay } from './util';
 
 const ITEM_COLS = `i.*, s.name AS source_name, s.weight AS source_weight`;
 
-export async function picksForToday(env: Env): Promise<ItemRow[]> {
-  const { results } = await env.DB.prepare(
-    `SELECT ${ITEM_COLS} FROM daily_picks p JOIN items i ON i.id = p.item_id JOIN sources s ON s.id = i.source_id
-     WHERE p.day = ? AND i.read_at IS NULL AND i.dismissed = 0 ORDER BY p.rank`
-  ).bind(vnDay()).all<ItemRow>();
-  return results;
-}
+export type SortMode = 'moi' | 'diem';
+const ORDER: Record<SortMode, string> = { moi: 'i.published_at DESC, i.id DESC', diem: 'i.score DESC, i.published_at DESC' };
 
-export async function latestByChannel(env: Env, channel: Channel, limit: number, offset = 0): Promise<ItemRow[]> {
+const PICKS = 50;
+const PICKS_PER_CHANNEL = 20;
+
+/**
+ * "Đáng đọc": tính lại MỖI LẦN mở trang (không cố định từ 06:30), nên bài mới về là có mặt ngay.
+ * Lấy 50 bài điểm cao nhất trong 72 giờ qua chưa đọc (mỗi kênh tối đa 20), rồi xếp theo lựa chọn:
+ * mới nhất trước (mặc định) hoặc điểm cao trước.
+ */
+export async function livePicks(env: Env, sort: SortMode): Promise<ItemRow[]> {
+  const since = new Date(Date.now() - 72 * 3600000).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT ${ITEM_COLS} FROM items i JOIN sources s ON s.id = i.source_id
-     WHERE i.channel = ? AND i.dismissed = 0 AND i.read_at IS NULL ORDER BY i.published_at DESC LIMIT ? OFFSET ?`
+     WHERE i.published_at >= ? AND i.dismissed = 0 AND i.read_at IS NULL
+     ORDER BY i.score DESC, i.published_at DESC LIMIT 400`
+  ).bind(since).all<ItemRow>();
+  const per: Record<string, number> = {};
+  const chosen: ItemRow[] = [];
+  for (const it of results) {
+    if (chosen.length >= PICKS) break;
+    if ((per[it.channel] ?? 0) >= PICKS_PER_CHANNEL) continue;
+    per[it.channel] = (per[it.channel] ?? 0) + 1;
+    chosen.push(it);
+  }
+  if (sort === 'moi') chosen.sort((x, y) => (x.published_at < y.published_at ? 1 : x.published_at > y.published_at ? -1 : y.id - x.id));
+  return chosen;
+}
+
+export async function latestByChannel(env: Env, channel: Channel, limit: number, offset = 0, sort: SortMode = 'moi'): Promise<ItemRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT ${ITEM_COLS} FROM items i JOIN sources s ON s.id = i.source_id
+     WHERE i.channel = ? AND i.dismissed = 0 AND i.read_at IS NULL ORDER BY ${ORDER[sort]} LIMIT ? OFFSET ?`
   ).bind(channel, limit, offset).all<ItemRow>();
   return results;
 }

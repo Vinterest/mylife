@@ -58,6 +58,9 @@ h1.t1{font-size:1.75em;line-height:1.25;font-weight:700;margin:0}
 .th.sm{width:84px}
 .rdmark{font-size:.82em;color:var(--mut);padding-top:.8em;border-top:1px solid var(--line)}
 .rdmark+.rw{border-top:0;padding-top:.3em}
+.new{display:inline-block;font-size:.62em;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#E8F7EE;color:#11733F;border-radius:4px;padding:.15em .45em;vertical-align:.2em}
+.seg.sm{margin-left:auto;font-size:.85em}
+.seg.sm a{padding:0 .8em;min-height:30px}
 .lead{display:flex;flex-direction:column;gap:.25em;padding:0 0 .7em}
 .lix{display:flex;gap:.65em;align-items:flex-start;padding:.6em 0;border-top:1px solid var(--line)}
 .lix>div{display:flex;flex-direction:column;gap:.25em;min-width:0}

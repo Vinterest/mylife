@@ -49,5 +49,7 @@ export async function ensureSchema(env: Env): Promise<void> {
   // Nguồn bổ sung (khi DB đã tạo từ trước): INSERT OR IGNORE nên chạy lại cũng an toàn.
   const extra = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources WHERE id = 'sm-deepseek'").first<{ n: number }>();
   if (!extra?.n) await env.DB.batch(splitSql(m4).map((st) => env.DB.prepare(st)));
+  // Sửa bài có ngày đăng ở tương lai (lỗi feed) — chúng chiếm đầu danh sách "Mới nhất".
+  await env.DB.prepare('UPDATE items SET published_at = fetched_at WHERE published_at > fetched_at').run();
   ready = true;
 }

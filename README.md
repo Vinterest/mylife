@@ -1,6 +1,6 @@
 # MyLife — V1 (phương án C · Học tập AI)
 
-Trang cá nhân của Sơn tại **mylife.gm-chess.com**. V1 chạy mục tiêu G2 · Học tập AI: tự lấy bài (cả toàn văn) từ arXiv và RSS, chọn 50 bài "Đáng đọc" mỗi sáng, chỉ dịch tiếng Việt khi anh bấm "Dịch bài này".
+Trang cá nhân của Sơn tại **mylife.gm-chess.com**. V1 chạy mục tiêu G2 · Học tập AI: tự lấy bài (cả toàn văn) từ arXiv và RSS, hiện 50 bài "Đáng đọc" (cập nhật mỗi lần mở trang, mới nhất trước), chỉ dịch tiếng Việt khi anh bấm "Dịch bài này".
 
 Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 
