@@ -76,7 +76,7 @@ export async function nextDueSource(env: Env, now = new Date()): Promise<SourceR
        OR (kind <> 'arxiv' AND last_run_at < ?1)
        OR (kind = 'arxiv' AND last_run_at < ?2)
        OR (last_error IS NOT NULL AND last_error <> ?3 AND last_run_at < ?4))
-     ORDER BY last_run_at IS NOT NULL, last_run_at LIMIT 1`
+     ORDER BY last_run_at IS NOT NULL, item_count > 0, last_run_at, weight DESC LIMIT 1`
   ).bind(rssBefore, arxivBoundary(now), RUNNING, retryBefore).first<SourceRow>();
 }
 
@@ -120,7 +120,10 @@ export async function crawlSource(env: Env, src: SourceRow): Promise<string> {
   try {
     const items = src.kind === 'sitemap' ? await sitemapItems(env, src) : src.kind === 'html' ? await listingItems(env, src) : src.kind === 'arxiv' ? parseArxiv(await fetchText(arxivQuery(src))) : parseFeed(await fetchText(src.url));
     const added = await saveItems(env, src, items);
-    await env.DB.prepare('UPDATE sources SET last_error = NULL, item_count = item_count + ? WHERE id = ?').bind(added, src.id).run();
+    // Trang tin/sitemap mở tối đa 3 bài mỗi lượt; nếu lượt này đủ 3 bài thì có thể còn nữa → cho chạy lại ở nhịp sau.
+    const more = (src.kind === 'sitemap' || src.kind === 'html') && items.length >= SITEMAP_NEW_PER_RUN;
+    const lastRun = more ? new Date(Date.now() - (RSS_EVERY_H + 1) * 3600000).toISOString() : startedAt;
+    await env.DB.prepare('UPDATE sources SET last_error = NULL, last_run_at = ?, item_count = item_count + ? WHERE id = ?').bind(lastRun, added, src.id).run();
     return `${src.id}: +${added} bài mới / ${items.length} trong feed`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -146,7 +146,7 @@ export function quotaPage(p: { quota: Quota; sources: SourceRow[]; jobs: { job: 
   const body = html`
 ${lateMin > 20
   ? html`<div class="box" style="background:#FDF6F0;border-color:#F3D6C3;margin-bottom:1.2em"><b>Lịch tự động chưa chạy${p.lastTick ? ` (lần cuối ${timeAgoVi(p.lastTick)})` : ''}.</b><span class="meta">Bình thường cứ 5 phút chạy một nhịp. Kiểm tra Cloudflare → Workers &amp; Pages → mylife → Settings → Trigger events: phải có “*/5 * * * *”. Tài khoản miễn phí chỉ có 5 cron cho tất cả Worker — nếu Worker khác đã dùng hết thì xóa bớt.</span></div>`
-  : html`<div class="box" style="margin-bottom:1.2em"><span><span class="st ok">Tự động OK</span> <span class="meta">nhịp gần nhất ${timeAgoVi(p.lastTick!)} · 5 phút/nhịp · mỗi nhịp crawl 1 nguồn đến hạn, lấy 1 toàn văn${p.requested ? ` · đang dịch ${p.requested} bài anh yêu cầu` : ''}</span></span></div>`}
+  : html`<div class="box" style="margin-bottom:1.2em"><span><span class="st ok">Tự động OK</span> <span class="meta">nhịp gần nhất ${timeAgoVi(p.lastTick!)} · 5 phút/nhịp · mỗi nhịp crawl tối đa 3 nguồn đến hạn, lấy 1 toàn văn${p.requested ? ` · đang dịch ${p.requested} bài anh yêu cầu` : ''}</span></span></div>`}
 <section class="cols">
   <div class="colmain">
     <div class="sh"><h2>Hạn mức miễn phí</h2><span class="meta">tự dừng ở 95%</span></div>
@@ -163,7 +163,11 @@ ${lateMin > 20
   <aside class="colside">
     <div class="box">
       <span class="kick">Chạy ngay</span>
-      <span class="meta">Crawl lại = xếp mọi nguồn vào hàng; mỗi 5 phút chạy 1 nguồn (14 nguồn ≈ 70 phút).</span>
+      <span class="meta">Crawl lại = xếp mọi nguồn vào hàng; mỗi 5 phút chạy 3 nguồn, nguồn chưa có bài chạy trước.</span>
+      ${(() => {
+        const q = p.sources.filter((s) => s.enabled && !s.last_run_at).length;
+        return q ? html`<span class="st wait" style="align-self:flex-start">Đang chờ crawl: ${q} nguồn · xong sau khoảng ${Math.ceil(q / 3) * 5} phút</span>` : '';
+      })()}
       ${[
         ['tick', 'Chạy 1 nhịp ngay'],
         ['crawl-rss', 'Crawl lại tất cả RSS'],

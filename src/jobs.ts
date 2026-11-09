@@ -6,13 +6,14 @@ import { cleanupFullTexts, fetchNextFullText, translateRequested } from './fullt
  * Gói Workers miễn phí: mỗi lượt chạy tối đa 50 truy vấn D1, 50 yêu cầu mạng và ~10 ms CPU.
  * Vì vậy thay vì 1 lượt lớn crawl hết 14 nguồn, mỗi 5 phút chạy một "nhịp" nhỏ:
  *   1. Dọn toàn văn cũ (mỗi ngày một lần, lúc 06:30). Đáng đọc tính lại mỗi lần mở trang.
- *   2. Crawl đúng 1 nguồn đến hạn (RSS mỗi 6 giờ, arXiv sau 06:00 hằng ngày).
+ *   2. Crawl tối đa 3 nguồn đến hạn (RSS/trang tin mỗi 6 giờ, arXiv sau 06:00); nguồn chưa từng có bài được ưu tiên.
  *   3. Dịch tiếp tối đa 2 lô cho bài anh đã bấm "Dịch bài này".
  *   4. Tự lấy toàn văn (không dịch) cho 1 bài.
  * Mỗi bước bọc try/catch riêng, và nhịp được ghi nhật ký NGAY KHI BẮT ĐẦU.
  */
 
 const RUNNING = 'đang chạy…';
+const CRAWL_PER_TICK = 3;
 
 async function step(notes: string[], name: string, fn: () => Promise<string>) {
   try {
@@ -35,12 +36,18 @@ export async function tick(env: Env): Promise<string> {
     const m = vnMinutes();
     return m >= 6 * 60 + 30 && m < 6 * 60 + 35 ? cleanupFullTexts(env) : '';
   });
-  await step(notes, 'Crawl', async () => {
-    const src = await nextDueSource(env);
-    return src ? crawlSource(env, src) : '';
-  });
+  // Crawl tối đa 3 nguồn đến hạn mỗi nhịp (37 nguồn ≈ 1 giờ), dừng sớm nếu đã chạy quá 25 giây.
+  let crawled = 0;
+  const t0 = Date.now();
+  while (crawled < CRAWL_PER_TICK && Date.now() - t0 < 25_000) {
+    const src = await nextDueSource(env).catch(() => null);
+    if (!src) break;
+    await step(notes, `Crawl ${src.id}`, () => crawlSource(env, src));
+    crawled++;
+  }
   await step(notes, 'Dịch', () => translateRequested(env, 2));
-  await step(notes, 'Toàn văn', () => fetchNextFullText(env));
+  // Giữ tổng yêu cầu mạng dưới 50: nhịp đã crawl đủ 3 nguồn thì để lấy toàn văn cho nhịp sau.
+  if (crawled < CRAWL_PER_TICK) await step(notes, 'Toàn văn', () => fetchNextFullText(env));
   return notes.join('\n');
 }
 
