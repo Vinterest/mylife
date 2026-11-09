@@ -77,13 +77,17 @@ app.use('/hoc-tap*', async (c, next) => {
   const body = await c.res.text();
   if (!body.includes('<!--cnt:')) { c.res = new Response(body, c.res); return; }
   const startVn = new Date(`${vnDay()}T00:00:00+07:00`).toISOString();
+  // Số hiện = bài mới về hôm nay − bài anh đã bấm Đã đọc hôm nay trong kênh đó (kể cả bài về từ hôm trước), tối thiểu 0.
   const { results } = await c.env.DB.prepare(
-    'SELECT channel, COUNT(*) AS n FROM items WHERE read_at IS NULL AND dismissed = 0 AND fetched_at >= ? GROUP BY channel'
-  ).bind(startVn).all<{ channel: string; n: number }>();
-  const cnt = Object.fromEntries(results.map((r) => [r.channel, r.n]));
+    `SELECT channel,
+            SUM(CASE WHEN fetched_at >= ?1 AND dismissed = 0 THEN 1 ELSE 0 END) AS fresh,
+            SUM(CASE WHEN read_at >= ?1 THEN 1 ELSE 0 END) AS readToday
+     FROM items WHERE fetched_at >= ?1 OR read_at >= ?1 GROUP BY channel`
+  ).bind(startVn).all<{ channel: string; fresh: number; readToday: number }>();
+  const cnt = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.fresh - r.readToday)]));
   const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
     const n = cnt[ch] ?? 0;
-    return `<span class="cnt${n ? '' : ' z'}" title="Bài mới hôm nay chưa đọc">(${n})</span>`;
+    return `<span class="cnt${n ? '' : ' z'}" title="Bài mới về hôm nay trừ bài đã đọc hôm nay">(${n})</span>`;
   });
   const headers = new Headers(c.res.headers);
   headers.delete('Content-Length');
