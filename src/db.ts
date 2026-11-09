@@ -6,7 +6,7 @@ const ITEM_COLS = `i.*, s.name AS source_name, s.weight AS source_weight`;
 export async function picksForToday(env: Env): Promise<ItemRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT ${ITEM_COLS} FROM daily_picks p JOIN items i ON i.id = p.item_id JOIN sources s ON s.id = i.source_id
-     WHERE p.day = ? ORDER BY p.rank`
+     WHERE p.day = ? AND i.read_at IS NULL AND i.dismissed = 0 ORDER BY p.rank`
   ).bind(vnDay()).all<ItemRow>();
   return results;
 }
@@ -14,8 +14,17 @@ export async function picksForToday(env: Env): Promise<ItemRow[]> {
 export async function latestByChannel(env: Env, channel: Channel, limit: number, offset = 0): Promise<ItemRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT ${ITEM_COLS} FROM items i JOIN sources s ON s.id = i.source_id
-     WHERE i.channel = ? AND i.dismissed = 0 ORDER BY i.published_at DESC LIMIT ? OFFSET ?`
+     WHERE i.channel = ? AND i.dismissed = 0 AND i.read_at IS NULL ORDER BY i.published_at DESC LIMIT ? OFFSET ?`
   ).bind(channel, limit, offset).all<ItemRow>();
+  return results;
+}
+
+/** Tab "Đã đọc": bài đã bấm Đã đọc, mới đọc trước. */
+export async function readItems(env: Env, limit: number, offset = 0): Promise<ItemRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT ${ITEM_COLS} FROM items i JOIN sources s ON s.id = i.source_id
+     WHERE i.read_at IS NOT NULL ORDER BY i.read_at DESC LIMIT ? OFFSET ?`
+  ).bind(limit, offset).all<ItemRow>();
   return results;
 }
 

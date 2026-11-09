@@ -53,6 +53,8 @@ h1.t1{font-size:1.75em;line-height:1.25;font-weight:700;margin:0}
 .th img{width:100%;height:100%;object-fit:cover;display:block}
 .th.lg{width:100%;margin-bottom:.5em}
 .th.sm{width:84px}
+.rdmark{font-size:.82em;color:var(--mut);padding-top:.8em;border-top:1px solid var(--line)}
+.rdmark+.rw{border-top:0;padding-top:.3em}
 .lead{display:flex;flex-direction:column;gap:.25em;padding:0 0 .7em}
 .lix{display:flex;gap:.65em;align-items:flex-start;padding:.6em 0;border-top:1px solid var(--line)}
 .lix>div{display:flex;flex-direction:column;gap:.25em;min-width:0}
@@ -98,6 +100,7 @@ export function g2Sub(cur: string): H {
     { id: 'inbox', label: 'Hộp nhặt', href: '/sap-co/hop-nhat', live: false },
     ...CHANNEL_ORDER.map((c) => ({ id: c, label: CHANNELS[c].short, href: `/hoc-tap/kenh/${CHANNELS[c].slug}`, live: true })),
     { id: 'news', label: 'Bản tin', href: '/sap-co/ban-tin', live: false },
+    { id: 'read', label: 'Đã đọc', href: '/hoc-tap/da-doc', live: true },
     { id: 'notes', label: 'Sổ tay', href: '/sap-co/so-tay', live: false },
     { id: 'listen', label: 'Nghe', href: '/sap-co/nghe', live: false },
     { id: 'quota', label: 'Nguồn & hạn mức', href: '/hoc-tap/han-muc', live: true },

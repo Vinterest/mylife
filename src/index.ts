@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import type { Env } from './types';
 import { quotaSnapshot } from './ai/quota';
 import { makePicks } from './picks';
-import { allSources, getItem, latestByChannel, picksForToday, recentJobs, weeklyCounts } from './db';
-import { channelPage, homePage, quotaPage, soonPage } from './views/pages';
+import { allSources, getItem, latestByChannel, picksForToday, readItems, recentJobs, weeklyCounts } from './db';
+import { channelPage, homePage, quotaPage, readPage, soonPage } from './views/pages';
 import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
 import { ensureFullText, translateItem, viewOf } from './fulltext';
@@ -122,14 +122,22 @@ app.post('/hoc-tap/bai/:id/:action{dich|dich-ai|lay-lai}', async (c) => {
   return c.redirect(`/hoc-tap/bai/${id}?lang=vi`, 303);
 });
 
-app.post('/hoc-tap/bai/:id/:action{giu|bo}', async (c) => {
+app.post('/hoc-tap/bai/:id/:action{giu|bo|da-doc}', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
   const id = Number(c.req.param('id'));
   const action = c.req.param('action');
   if (action === 'giu') await c.env.DB.prepare('UPDATE items SET kept = 1 - kept WHERE id = ?').bind(id).run();
+  else if (action === 'da-doc') await c.env.DB.prepare('UPDATE items SET read_at = CASE WHEN read_at IS NULL THEN ? ELSE NULL END WHERE id = ?').bind(new Date().toISOString(), id).run();
   else await c.env.DB.prepare('UPDATE items SET dismissed = 1 WHERE id = ?').bind(id).run();
   const back = String((await c.req.parseBody()).back ?? '/hoc-tap');
   return c.redirect(back.startsWith('/') ? back : '/hoc-tap', 303);
+});
+
+app.get('/hoc-tap/da-doc', async (c) => {
+  const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
+  const rows = await readItems(c.env, 21, (pageNo - 1) * 20);
+  const total = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM items WHERE read_at IS NOT NULL').first<{ n: number }>();
+  return c.html(readPage({ items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20, total: total?.n ?? 0 }));
 });
 
 app.get('/hoc-tap/han-muc', async (c) => {

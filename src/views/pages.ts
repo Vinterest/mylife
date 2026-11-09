@@ -23,6 +23,7 @@ function itemActions(it: ItemRow, back: string) {
   <span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}${it.read_minutes ? ` · ${it.read_minutes} phút` : ''}</span>
   <a href="/hoc-tap/bai/${it.id}">Đọc toàn văn</a>
   <a href="${it.url}" target="_blank" rel="noopener">Bài gốc ↗</a>
+  <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/da-doc"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${it.read_at ? '↩ Chưa đọc' : '✓ Đã đọc'}</button></form>
   <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/giu"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${it.kept ? 'Đã giữ ✓' : 'Giữ'}</button></form>
   <form class="inline" method="post" action="/hoc-tap/bai/${it.id}/bo"><input type="hidden" name="back" value="${back}"><button class="l mut" type="submit" style="color:var(--mut)">Không quan tâm</button></form>
 </div>`;
@@ -105,6 +106,24 @@ export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[
   </div>
 </section>`;
   return page({ title: ch.name, tab: 'g2', sub: g2Sub(p.channel), body });
+}
+
+export function readPage(p: { items: ItemRow[]; pageNo: number; hasMore: boolean; total: number }) {
+  const back = `/hoc-tap/da-doc?trang=${p.pageNo}`;
+  const body = html`
+<section class="cols">
+  <div class="colmain">
+    <div class="sh"><h2>Đã đọc · ${p.total} bài</h2><span class="meta">mới đọc trước · trang ${p.pageNo} · bấm “↩ Chưa đọc” để đưa bài về danh sách</span></div>
+    ${p.items.length
+      ? p.items.map((it) => html`<div class="rdmark">Đọc xong ${timeAgoVi(it.read_at!)}</div>${readRow(it, back)}`)
+      : html`<div class="empty">Chưa có bài nào. Bấm “✓ Đã đọc” ở mỗi bài khi anh đọc hoặc review xong, bài sẽ chuyển vào đây.</div>`}
+    <div class="pager">
+      ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/da-doc?trang=${p.pageNo - 1}">‹ Mới hơn</a>` : html`<span></span>`}
+      ${p.hasMore ? html`<a class="btn2" href="/hoc-tap/da-doc?trang=${p.pageNo + 1}">Cũ hơn ›</a>` : ''}
+    </div>
+  </div>
+</section>`;
+  return page({ title: 'Đã đọc', tab: 'g2', sub: g2Sub('read'), body });
 }
 
 const FT_LABEL: Record<string, string> = { fetched: 'Đã lấy toàn văn (chưa dịch)', partial: 'Đang dịch dở', translated: 'Đã dịch xong', waiting_quota: 'Chờ hạn mức dịch', abstract_only: 'Chỉ có phần mô tả', fetch_failed: 'Lỗi lấy bài' };

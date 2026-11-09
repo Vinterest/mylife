@@ -9,7 +9,7 @@ export async function makePicks(env: Env, day = vnDay()): Promise<string> {
   const since = new Date(Date.now() - 72 * 3600000).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT i.*, s.weight AS source_weight FROM items i JOIN sources s ON s.id = i.source_id
-     WHERE i.published_at >= ? AND i.dismissed = 0
+     WHERE i.published_at >= ? AND i.dismissed = 0 AND i.read_at IS NULL
        AND i.id NOT IN (SELECT item_id FROM daily_picks WHERE day < ?)`
   ).bind(since, day).all<ItemRow>();
 

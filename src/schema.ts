@@ -29,13 +29,20 @@ export async function ensureSchema(env: Env): Promise<void> {
       if (stmts.length) await env.DB.batch(stmts);
     }
   }
-  // Cột thêm sau (ảnh đại diện). Không để trong migrations/ để tránh xung đột với lệnh tự thêm cột này.
-  const col = await env.DB.prepare("SELECT COUNT(*) AS n FROM pragma_table_info('items') WHERE name = 'image_url'").first<{ n: number }>();
-  if (!col?.n) {
+  // Cột thêm sau. Không để trong migrations/ để tránh xung đột với lệnh tự thêm cột.
+  const { results: cols } = await env.DB.prepare("SELECT name FROM pragma_table_info('items') WHERE name IN ('image_url','read_at')").all<{ name: string }>();
+  const has = new Set(cols.map((c) => c.name));
+  if (!has.has('image_url')) {
     await env.DB.batch([
       env.DB.prepare('ALTER TABLE items ADD COLUMN image_url TEXT'),
       // Chuyển sang "chỉ dịch khi anh bấm": bỏ hàng dịch tự động cũ (một lần).
       env.DB.prepare(`UPDATE fulltexts SET priority = 0 WHERE status IN ('fetched','partial','waiting_quota')`),
+    ]);
+  }
+  if (!has.has('read_at')) {
+    await env.DB.batch([
+      env.DB.prepare('ALTER TABLE items ADD COLUMN read_at TEXT'), // thời điểm anh bấm "Đã đọc"
+      env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_items_read ON items(read_at)'),
     ]);
   }
   ready = true;

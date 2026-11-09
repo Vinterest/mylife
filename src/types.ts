@@ -59,6 +59,7 @@ export interface ItemRow {
   attempts: number;
   read_minutes: number | null;
   image_url: string | null;
+  read_at: string | null;
   kept: number;
   dismissed: number;
   source_name?: string;
