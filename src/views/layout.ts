@@ -112,7 +112,7 @@ export function g2Sub(cur: string): H {
     { id: 'quota', label: 'Nguồn & hạn mức', href: '/hoc-tap/han-muc', live: true },
   ];
   return html`<nav class="wrap sub" aria-label="Học tập AI">${items.map(
-    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) || i.id === 'inbox' ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
+    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) || i.id === 'inbox' || i.id === 'notes' ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
   )}</nav>`;
 }
 

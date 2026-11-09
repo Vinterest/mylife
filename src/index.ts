@@ -97,9 +97,14 @@ app.use('/hoc-tap*', async (c, next) => {
   const cnt = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.fresh - r.readToday)]));
   const inbox = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures WHERE archived = 0').first<{ n: number }>().catch(() => null);
   cnt.inbox = inbox?.n ?? 0;
+  // Sổ tay = mục nhặt đã lưu + bài đã Giữ (không tính bài tạo từ Hộp nhặt, vì đã tính ở mục nhặt) — giống trang Sổ tay.
+  const notes = await c.env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM captures WHERE kept = 1) + (SELECT COUNT(*) FROM items WHERE kept = 1 AND source_id <> 'manual') AS n`
+  ).first<{ n: number }>().catch(() => null);
+  cnt.notes = notes?.n ?? 0;
   const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
     const n = cnt[ch] ?? 0;
-    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : 'Bài mới về hôm nay trừ bài đã đọc hôm nay';
+    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : ch === 'notes' ? 'Số mục trong Sổ tay' : 'Bài mới về hôm nay trừ bài đã đọc hôm nay';
     return `<span class="cnt${n ? '' : ' z'}" title="${tip}">(${n})</span>`;
   });
   const headers = new Headers(c.res.headers);
