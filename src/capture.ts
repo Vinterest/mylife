@@ -111,14 +111,14 @@ export async function captureImages(env: Env, id: number): Promise<CaptureImage[
 }
 
 /** Danh sách cho Hộp nhặt / Sổ tay (không đọc cột ảnh để nhẹ). */
-export async function listCaptures(env: Env, where: string, limit = 60): Promise<CaptureRow[]> {
+export async function listCaptures(env: Env, where: string, limit = 60, offset = 0): Promise<CaptureRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT c.*,
        (SELECT GROUP_CONCAT(id) FROM capture_images WHERE capture_id = c.id) AS img_ids,
        (SELECT SUBSTR(ocr_text, 1, 400) FROM capture_images WHERE capture_id = c.id AND ocr_text IS NOT NULL ORDER BY id LIMIT 1) AS ocr_preview,
        (SELECT COUNT(*) FROM capture_images WHERE capture_id = c.id AND ocr_status = 'pending') AS ocr_pending
-     FROM captures c WHERE ${where} ORDER BY c.created_at DESC LIMIT ?`
-  ).bind(limit).all<CaptureRow>();
+     FROM captures c WHERE ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`
+  ).bind(limit, offset).all<CaptureRow>();
   return results;
 }
 

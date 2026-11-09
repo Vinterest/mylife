@@ -75,7 +75,6 @@ function capRow(c: CaptureRow, back: string) {
       <a href="/hoc-tap/hop-nhat/${c.id}">Mở</a>
       ${c.item_id ? html`<a href="/hoc-tap/bai/${c.item_id}?toan-van=1">Đọc toàn văn</a>` : ''}
       <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu Sổ tay'}</button></form>
-      ${c.archived ? '' : html`<form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/xong"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">✓ Xong</button></form>`}
     </div>
   </div>
 </article>`;
@@ -119,18 +118,21 @@ function captureForm(open: boolean) {
 <script>${raw(FORM_JS)}</script>`;
 }
 
-export function inboxPage(p: { items: CaptureRow[]; done: number; showDone: boolean }) {
-  const back = p.showDone ? '/hoc-tap/hop-nhat?xem=xong' : '/hoc-tap/hop-nhat';
+export function inboxPage(p: { items: CaptureRow[]; total: number; pageNo: number; hasMore: boolean }) {
+  const back = `/hoc-tap/hop-nhat${p.pageNo > 1 ? `?trang=${p.pageNo}` : ''}`;
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>${p.showDone ? 'Đã xử lý' : 'Hộp nhặt'} · ${p.items.length} mục</h2><span class="meta">mới nhặt trước</span>
-      <span class="seg sm"><a class="${p.showDone ? '' : 'on'}" href="/hoc-tap/hop-nhat">Chưa xử lý</a><a class="${p.showDone ? 'on' : ''}" href="/hoc-tap/hop-nhat?xem=xong">Đã xử lý (${p.done})</a></span></div>
-    ${p.items.length ? p.items.map((c) => capRow(c, back)) : html`<div class="empty">${p.showDone ? 'Chưa có mục nào đã xử lý.' : 'Hộp nhặt trống. Dán link hoặc chọn ảnh chụp ở ô bên cạnh (trên điện thoại: ở trên cùng) để nhặt bài đầu tiên.'}</div>`}
+    <div class="sh"><h2>Hộp nhặt · ${p.total} mục</h2><span class="meta">mới nhặt trước${p.pageNo > 1 ? ` · trang ${p.pageNo}` : ''}</span></div>
+    ${p.items.length ? p.items.map((c) => capRow(c, back)) : html`<div class="empty">Hộp nhặt trống. Chọn ảnh chụp, dán link hoặc nội dung ở khung “Nhặt bài mới” để nhặt bài đầu tiên.</div>`}
+    <div class="pager">
+      ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/hop-nhat?trang=${p.pageNo - 1}">‹ Mới hơn</a>` : html`<span></span>`}
+      ${p.hasMore ? html`<a class="btn2" href="/hoc-tap/hop-nhat?trang=${p.pageNo + 1}">Cũ hơn ›</a>` : ''}
+    </div>
   </div>
   <aside class="colside" style="order:-1">
-    ${captureForm(!p.items.length || p.showDone === false && p.items.length < 3)}
-    <div class="box capinfo"><span class="kick">Sau khi gửi</span><span class="meta">Ảnh và nội dung được lưu nguyên như anh gửi (không dùng AI). Link: MyLife tự lấy tiêu đề, ảnh và toàn văn nếu trang công khai; Facebook thường cần đăng nhập nên chỉ lưu link. Bấm “✓ Xong” để đưa mục ra khỏi Hộp nhặt, “Lưu Sổ tay” để giữ lâu dài.</span></div>
+    ${captureForm(p.pageNo === 1 && p.total < 3)}
+    <div class="box capinfo"><span class="kick">Sau khi gửi</span><span class="meta">Ảnh và nội dung được lưu nguyên như anh gửi (không dùng AI). Link: MyLife tự lấy tiêu đề, ảnh và toàn văn nếu trang công khai; Facebook thường cần đăng nhập nên chỉ lưu link. Bấm “Lưu Sổ tay” để giữ mục lâu dài.</span></div>
   </aside>
 </section>`;
   return page({ title: 'Hộp nhặt', tab: 'g2', sub: g2Sub('inbox'), body });
@@ -163,14 +165,13 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
     <div class="acts" style="margin-top:1.4em">
       <a href="/hoc-tap/hop-nhat">‹ Về Hộp nhặt</a>
       <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><button class="${c.kept ? 'btn2' : 'btn'}" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu vào Sổ tay'}</button></form>
-      <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/xong"><input type="hidden" name="back" value="${c.archived ? back : '/hoc-tap/hop-nhat'}"><button class="btn2" type="submit">${c.archived ? '↩ Đưa lại Hộp nhặt' : '✓ Xong'}</button></form>
       <details style="display:inline-block"><summary class="meta" style="cursor:pointer">Xóa…</summary><form method="post" action="/hoc-tap/hop-nhat/${c.id}/xoa" style="margin-top:.4em"><button class="btn2" style="color:#9A2A14;border-color:#9A2A14" type="submit">Xóa hẳn mục này và ảnh</button></form></details>
     </div>
   </article>
 </section>
 <section class="cols" id="cu-hon" style="margin-top:1.6em">
   <div class="colmain" style="max-width:820px">
-    <div class="sh"><h2>10 mục nhặt trước mục này</h2><span class="meta">mới hơn trước · gồm cả mục đã xử lý</span></div>
+    <div class="sh"><h2>10 mục nhặt trước mục này</h2><span class="meta">mới hơn trước</span></div>
     ${older.length
       ? older.map((o) => capRow(o, `/hoc-tap/hop-nhat/${c.id}`))
       : html`<div class="empty">Đây là mục nhặt cũ nhất.</div>`}

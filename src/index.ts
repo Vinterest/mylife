@@ -102,7 +102,7 @@ app.use('/hoc-tap*', async (c, next) => {
      FROM items WHERE dismissed = 0 GROUP BY channel`
   ).all<{ channel: string; total: number; readN: number }>();
   const cnt: Record<string, number> = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.total - r.readN)]));
-  const inbox = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures WHERE archived = 0').first<{ n: number }>().catch(() => null);
+  const inbox = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures').first<{ n: number }>().catch(() => null);
   cnt.inbox = inbox?.n ?? 0;
   // Sổ tay = mục nhặt đã lưu + bài đã Giữ (không tính bài tạo từ Hộp nhặt, vì đã tính ở mục nhặt) — giống trang Sổ tay.
   const notes = await c.env.DB.prepare(
@@ -113,7 +113,7 @@ app.use('/hoc-tap*', async (c, next) => {
   cnt.read = read?.n ?? 0;
   const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
     const n = cnt[ch] ?? 0;
-    const tip = ch === 'inbox' ? 'Mục nhặt chưa xử lý' : ch === 'notes' ? 'Số mục trong Sổ tay' : ch === 'read' ? 'Tổng số bài đã đọc' : 'Tổng số bài của kênh trừ số bài đã đọc';
+    const tip = ch === 'inbox' ? 'Tổng số mục trong Hộp nhặt' : ch === 'notes' ? 'Số mục trong Sổ tay' : ch === 'read' ? 'Tổng số bài đã đọc' : 'Tổng số bài của kênh trừ số bài đã đọc';
     return `<span class="cnt${n ? '' : ' z'}" title="${tip}">(${n})</span>`;
   });
   const headers = new Headers(c.res.headers);
@@ -247,10 +247,10 @@ async function readCaptureForm(fd: FormData, via: NewCapture['via']): Promise<Ne
 }
 
 app.get('/hoc-tap/hop-nhat', async (c) => {
-  const showDone = c.req.query('xem') === 'xong';
-  const items = await listCaptures(c.env, showDone ? 'c.archived = 1' : 'c.archived = 0', 100);
-  const done = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures WHERE archived = 1').first<{ n: number }>();
-  return c.html(inboxPage({ items, done: done?.n ?? 0, showDone }));
+  const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
+  const items = await listCaptures(c.env, '1 = 1', 51, (pageNo - 1) * 50);
+  const total = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures').first<{ n: number }>();
+  return c.html(inboxPage({ items: items.slice(0, 50), total: total?.n ?? 0, pageNo, hasMore: items.length > 50 }));
 });
 
 app.post('/hoc-tap/hop-nhat', async (c) => {
@@ -272,7 +272,7 @@ app.get('/hoc-tap/hop-nhat/:id{[0-9]+}', async (c) => {
   return c.html(capturePage(cap, await captureImages(c.env, cap.id), item, await olderCaptures(c.env, cap)));
 });
 
-app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xong|xoa|ghi-chu|xu-ly-lai}', async (c) => {
+app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xoa|xu-ly-lai}', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
   const id = Number(c.req.param('id'));
   const action = c.req.param('action');
@@ -280,7 +280,6 @@ app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xong|xoa|ghi-chu|xu-ly-la
   const back = String(body.back ?? `/hoc-tap/hop-nhat/${id}`);
   const go = (u: string) => c.redirect(u.startsWith('/') ? u : '/hoc-tap/hop-nhat', 303);
   if (action === 'so-tay') await c.env.DB.prepare('UPDATE captures SET kept = 1 - kept WHERE id = ?').bind(id).run();
-  if (action === 'xong') await c.env.DB.prepare('UPDATE captures SET archived = 1 - archived WHERE id = ?').bind(id).run();
   if (action === 'ghi-chu') {
     await c.env.DB.prepare('UPDATE captures SET note = ? WHERE id = ?').bind(String(body.note ?? '').trim().slice(0, 30000) || null, id).run();
     return go(`/hoc-tap/hop-nhat/${id}`);
