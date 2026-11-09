@@ -1,5 +1,5 @@
 // Kiểm tra bộ đọc feed, ảnh đại diện, lọc từ khóa, chấm điểm, tách SQL — chạy: npm test
-import { parseArxiv, parseFeed, parsePageMeta, parseSitemap } from '../src/crawl/parse';
+import { parseArxiv, parseFeed, parseListing, parsePageMeta, parseSitemap } from '../src/crawl/parse';
 import { matchesKeywords, normalizeTitle, scoreItem } from '../src/util';
 import { thumbSvg } from '../src/views/thumb';
 import { rotationOrder } from '../src/ai/quota';
@@ -95,8 +95,18 @@ ok(sm.length === 2 && sm[0].url.endsWith('news261017') && sm[0].date.toISOString
 const pm = parsePageMeta('<html><head><title>DeepSeek-V4.1 Release | DeepSeek API Docs</title><meta property="og:description" content="🚀 Here!"><meta property="og:image" content="/img/card.jpeg"></head>', 'https://api-docs.deepseek.com/news/x');
 ok(pm.title === 'DeepSeek-V4.1 Release' && pm.description === '🚀 Here!' && pm.image === 'https://api-docs.deepseek.com/img/card.jpeg', `Đọc tiêu đề/mô tả/ảnh trang (${pm.title})`);
 
-const counts = ['0001_init', '0002_sources', '0003_fulltext', '0004_sources_ai_labs'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
-ok(counts.join(',') === '8,1,2,1', `Tách SQL thành câu lệnh (${counts.join(',')})`);
+const LST = `<nav><a href="/discover">Discover</a><a href="/discover/">x</a></nav><a href="/discover/neos-hands?ref=1">NEO</a><a href="https://www.1x.tech/discover/bill-nash-cfo">CFO</a><a href="/discover/neos-hands#top">dup</a><a href="https://other.com/discover/x">ngoài</a><a href="/about">about</a>`;
+const ls = parseListing(LST, 'https://www.1x.tech/discover', '/discover/');
+ok(ls.join(' ') === 'https://www.1x.tech/discover/neos-hands https://www.1x.tech/discover/bill-nash-cfo', `Trang danh sách: lấy link bài, bỏ trùng/ngoài miền (${ls.join(' ')})`);
+const pd = parsePageMeta('<head><meta property="article:published_time" content="2026-07-09T10:00:00Z"><title>NEO</title></head>', 'https://www.1x.tech/discover/neos-hands');
+const pd2 = parsePageMeta('<head><script type="application/ld+json">{"datePublished": "2026-10-21"}</script><title>UR</title></head>', 'https://x');
+ok(pd.published?.toISOString().startsWith('2026-07-09') === true && pd2.published?.toISOString().startsWith('2026-10-21') === true, 'Ngày đăng từ meta / JSON-LD');
+const SM2 = `<urlset><url><loc>https://bostondynamics.com/news/a/</loc><lastmod>2023-09-13T15:05:43+00:00</lastmod></url><url><loc>https://bostondynamics.com/news/stretch/</loc><lastmod>2026-11-03T22:17:23+00:00</lastmod></url></urlset>`;
+const sm2 = parseSitemap(SM2, '/news/');
+ok(sm2[0].url.endsWith('stretch/') && sm2[0].date.toISOString().startsWith('2026-11-03'), 'Sitemap theo lastmod, mới nhất trước');
+
+const counts = ['0001_init', '0002_sources', '0003_fulltext', '0004_sources_ai_labs', '0005_sources_robotics'].map((f) => splitSql(readFileSync(`migrations/${f}.sql`, 'utf8')).length);
+ok(counts.join(',') === '8,1,2,1,1', `Tách SQL thành câu lệnh (${counts.join(',')})`);
 ok(splitSql('-- a; b\nCREATE TABLE x (a TEXT); -- c;\nINSERT INTO x VALUES (1);').length === 2, 'Tách SQL bỏ dấu ; trong chú thích');
 
 console.log(fail ? `\n${fail} kiểm tra lỗi` : '\nTất cả kiểm tra đạt');

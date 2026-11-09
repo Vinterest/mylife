@@ -173,7 +173,7 @@ export function parseSitemap(xml: string, pathPart: string): { url: string; date
 }
 
 /** Tiêu đề, mô tả, ảnh của một trang (og:… hoặc <title>), bỏ hậu tố " | Tên trang". */
-export function parsePageMeta(html: string, base: string): { title: string; description: string; image?: string } {
+export function parsePageMeta(html: string, base: string): { title: string; description: string; image?: string; published?: Date } {
   const head = html.slice(0, 200_000);
   const meta = (prop: string) => {
     for (const t of head.match(/<meta\b[^>]*>/gi) ?? []) {
@@ -185,5 +185,31 @@ export function parsePageMeta(html: string, base: string): { title: string; desc
   const img = meta('og:image');
   let image: string | undefined;
   try { image = img ? new URL(img, base).toString() : undefined; } catch { image = undefined; }
-  return { title, description: stripHtml(meta('og:description') || meta('description')), image };
+  // Ngày đăng: meta article:published_time → JSON-LD datePublished → <time datetime> đầu tiên.
+  const ds =
+    meta('article:published_time') || meta('og:published_time') || meta('datePublished') || meta('date') ||
+    /"datePublished"\s*:\s*"([^"]+)"/.exec(head)?.[1] ||
+    /<time\b[^>]*\sdatetime\s*=\s*"([^"]+)"/i.exec(head)?.[1] || '';
+  const d = ds ? new Date(ds) : null;
+  const published = d && !isNaN(d.getTime()) ? d : undefined;
+  return { title, description: stripHtml(meta('og:description') || meta('description')), image, published };
+}
+
+/** Trang danh sách tin (không có RSS/sitemap): các link cùng tên miền có chứa `pathPart`, theo thứ tự trên trang. */
+export function parseListing(html: string, base: string, pathPart: string): string[] {
+  const out: string[] = [];
+  const self = new URL(base);
+  for (const t of html.match(/<a\b[^>]*>/gi) ?? []) {
+    const href = attr(t, 'href');
+    if (!href || href.startsWith('#')) continue;
+    let u: URL;
+    try { u = new URL(href, base); } catch { continue; }
+    u.hash = '';
+    u.search = '';
+    const s = u.toString().replace(/\/$/, '');
+    if (u.host !== self.host || !u.pathname.includes(pathPart)) continue;
+    if (s === base.replace(/\/$/, '') || u.pathname.replace(/\/$/, '').endsWith(pathPart.replace(/\/$/, ''))) continue; // bỏ chính trang danh sách
+    if (!out.includes(s)) out.push(s);
+  }
+  return out;
 }

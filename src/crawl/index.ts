@@ -1,6 +1,6 @@
 import type { Env, RawItem, SourceRow } from '../types';
 import { matchesKeywords, normalizeTitle, readMinutes, scoreItem } from '../util';
-import { parseArxiv, parseFeed, parsePageMeta, parseSitemap } from './parse';
+import { parseArxiv, parseFeed, parseListing, parsePageMeta, parseSitemap } from './parse';
 
 const UA = 'MyLife-Reader/1.0 (personal reader; contact via mylife.gm-chess.com)';
 const MAX_AGE_DAYS = 7;
@@ -31,7 +31,7 @@ async function fetchText(url: string): Promise<string> {
 /** Lưu cả nguồn trong MỘT lệnh db.batch (gói miễn phí giới hạn 50 truy vấn D1 mỗi lượt chạy). */
 async function saveItems(env: Env, src: SourceRow, raw: RawItem[]): Promise<number> {
   const now = new Date();
-  const cutoff = now.getTime() - (src.kind === 'sitemap' ? SITEMAP_AGE_DAYS : MAX_AGE_DAYS) * 86400000;
+  const cutoff = now.getTime() - (src.kind === 'sitemap' || src.kind === 'html' ? SITEMAP_AGE_DAYS : MAX_AGE_DAYS) * 86400000;
   const seen = new Set<string>();
   const stmts: D1PreparedStatement[] = [];
   const fill: D1PreparedStatement[] = [];
@@ -84,15 +84,31 @@ export async function nextDueSource(env: Env, now = new Date()): Promise<SourceR
 async function sitemapItems(env: Env, src: SourceRow): Promise<RawItem[]> {
   const cutoff = Date.now() - SITEMAP_AGE_DAYS * 86400000;
   const entries = parseSitemap(await fetchText(src.url), src.keywords ?? '').filter((e) => e.date.getTime() >= cutoff).slice(0, 10);
+  return newPages(env, entries);
+}
+
+/** Trang danh sách tin không có RSS (1X, Universal Robots…): lấy link bài theo thứ tự trên trang. */
+async function listingItems(env: Env, src: SourceRow): Promise<RawItem[]> {
+  const res = await fetch(src.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const links = parseListing(await res.text(), res.url, src.keywords ?? '/').slice(0, 10);
+  return newPages(env, links.map((url) => ({ url })));
+}
+
+/** Chỉ mở trang của tối đa 3 bài chưa có (lấy tiêu đề, mô tả, ảnh, ngày đăng). Bài cũ hơn 60 ngày hoặc không rõ ngày thì bỏ. */
+async function newPages(env: Env, entries: { url: string; date?: Date }[]): Promise<RawItem[]> {
   if (!entries.length) return [];
   const { results } = await env.DB.prepare(`SELECT url FROM items WHERE url IN (${entries.map(() => '?').join(',')})`).bind(...entries.map((e) => e.url)).all<{ url: string }>();
   const known = new Set(results.map((r) => r.url));
+  const cutoff = Date.now() - SITEMAP_AGE_DAYS * 86400000;
   const out: RawItem[] = [];
   for (const e of entries.filter((x) => !known.has(x.url)).slice(0, SITEMAP_NEW_PER_RUN)) {
     const res = await fetch(e.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) });
     if (!res.ok) continue;
     const m = parsePageMeta(await res.text(), res.url);
-    if (m.title) out.push({ url: e.url, title: m.title, abstract: m.description, image: m.image, published: e.date, isPaper: false });
+    const published = m.published ?? e.date;
+    if (!m.title || !published || published.getTime() < cutoff) continue;
+    out.push({ url: e.url, title: m.title, abstract: m.description, image: m.image, published, isPaper: false });
   }
   return out;
 }
@@ -102,7 +118,7 @@ export async function crawlSource(env: Env, src: SourceRow): Promise<string> {
   const startedAt = new Date().toISOString();
   await env.DB.prepare('UPDATE sources SET last_run_at = ?, last_error = ? WHERE id = ?').bind(startedAt, RUNNING, src.id).run();
   try {
-    const items = src.kind === 'sitemap' ? await sitemapItems(env, src) : src.kind === 'arxiv' ? parseArxiv(await fetchText(arxivQuery(src))) : parseFeed(await fetchText(src.url));
+    const items = src.kind === 'sitemap' ? await sitemapItems(env, src) : src.kind === 'html' ? await listingItems(env, src) : src.kind === 'arxiv' ? parseArxiv(await fetchText(arxivQuery(src))) : parseFeed(await fetchText(src.url));
     const added = await saveItems(env, src, items);
     await env.DB.prepare('UPDATE sources SET last_error = NULL, item_count = item_count + ? WHERE id = ?').bind(added, src.id).run();
     return `${src.id}: +${added} bài mới / ${items.length} trong feed`;

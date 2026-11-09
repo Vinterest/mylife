@@ -3,6 +3,7 @@ import m1 from '../migrations/0001_init.sql';
 import m2 from '../migrations/0002_sources.sql';
 import m3 from '../migrations/0003_fulltext.sql';
 import m4 from '../migrations/0004_sources_ai_labs.sql';
+import m5 from '../migrations/0005_sources_robotics.sql';
 
 /** Tách file SQL thành từng câu lệnh: bỏ chú thích "--", tách theo dấu ";" cuối câu. */
 export function splitSql(sql: string): string[] {
@@ -25,7 +26,7 @@ export async function ensureSchema(env: Env): Promise<void> {
   if (ready) return;
   const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('sources','items','daily_picks','quota_usage','jobs_log','fulltexts')").first<{ n: number }>();
   if ((row?.n ?? 0) < 6) {
-    for (const file of [m1, m2, m3, m4]) {
+    for (const file of [m1, m2, m3, m4, m5]) {
       const stmts = splitSql(file).map((s) => env.DB.prepare(s));
       if (stmts.length) await env.DB.batch(stmts);
     }
@@ -47,8 +48,10 @@ export async function ensureSchema(env: Env): Promise<void> {
     ]);
   }
   // Nguồn bổ sung (khi DB đã tạo từ trước): INSERT OR IGNORE nên chạy lại cũng an toàn.
-  const extra = await env.DB.prepare("SELECT COUNT(*) AS n FROM sources WHERE id = 'sm-deepseek'").first<{ n: number }>();
-  if (!extra?.n) await env.DB.batch(splitSql(m4).map((st) => env.DB.prepare(st)));
+  const { results: have } = await env.DB.prepare("SELECT id FROM sources WHERE id IN ('sm-deepseek','sm-figure')").all<{ id: string }>();
+  const ids = new Set(have.map((r) => r.id));
+  if (!ids.has('sm-deepseek')) await env.DB.batch(splitSql(m4).map((st) => env.DB.prepare(st)));
+  if (!ids.has('sm-figure')) await env.DB.batch(splitSql(m5).map((st) => env.DB.prepare(st)));
   // Sửa bài có ngày đăng ở tương lai (lỗi feed) — chúng chiếm đầu danh sách "Mới nhất".
   await env.DB.prepare('UPDATE items SET published_at = fetched_at WHERE published_at > fetched_at').run();
   ready = true;
