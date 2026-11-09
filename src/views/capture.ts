@@ -73,7 +73,6 @@ function capRow(c: CaptureRow, back: string) {
     <div class="acts">
       <span class="meta">${timeAgoVi(c.created_at)} · ${c.via === 'shortcut' ? 'từ Phím tắt iPhone' : 'từ web'}${nImg ? ` · ${nImg} ảnh` : ''}${c.url ? ' · có link' : ''}</span>
       <a href="/hoc-tap/hop-nhat/${c.id}">Mở</a>
-      ${c.item_id ? html`<a href="/hoc-tap/bai/${c.item_id}?toan-van=1">Đọc toàn văn</a>` : ''}
       <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu Sổ tay'}</button></form>
     </div>
   </div>
