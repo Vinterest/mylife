@@ -1,6 +1,7 @@
 import { html, raw } from 'hono/html';
 import type { HtmlEscapedString } from 'hono/utils/html';
 import { CHANNELS, CHANNEL_ORDER, vnDateLong } from '../util';
+import { LOGO_MARK_SVG } from '../brand';
 import type { Channel } from '../types';
 
 type H = HtmlEscapedString | Promise<HtmlEscapedString>;
@@ -19,7 +20,8 @@ a:hover{color:var(--ac);text-decoration:underline}
 .util .wrap{display:flex;justify-content:space-between;align-items:center;gap:1em;flex-wrap:wrap;padding-top:.5em;padding-bottom:.5em}
 .util nav{display:flex;gap:1.2em;flex-wrap:wrap}
 header.top{display:flex;align-items:center;gap:1em;flex-wrap:wrap;padding-top:.9em;padding-bottom:.3em}
-.logo{font-size:2em;font-weight:700;letter-spacing:-.02em}
+.logo{display:inline-flex;align-items:center;gap:.4em;font-size:1.7em;font-weight:700;letter-spacing:.12em;color:var(--ink,#14202B);text-decoration:none}
+.logo-mark{width:1.25em;height:1.25em;flex:none}
 .tabs{display:flex;flex-wrap:wrap;border-bottom:1px solid #DFE4EA}
 .tabs a{display:inline-flex;align-items:center;gap:.45em;padding:.8em .85em .7em;font-weight:600;color:var(--ink);border-bottom:3px solid transparent;white-space:nowrap}
 .tabs a:hover{text-decoration:none;border-bottom-color:#C9D1DA}
@@ -126,17 +128,17 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MyLife">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest?v=5">
+<link rel="icon" href="/favicon.svg?v=5" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=5">
+<link rel="stylesheet" href="/app.css?v=6">
 <title>${opts.title} · MyLife</title>
 </head>
 <body>
 <div class="util"><div class="wrap"><span class="mut">${vnDateLong()} · Hà Nội</span><nav><a class="mut" href="/hoc-tap/han-muc">Nguồn &amp; hạn mức</a><a href="/hoc-tap" style="font-weight:600">Sơn</a></nav></div></div>
-<header class="wrap top"><a class="logo" href="/">MyLife</a><span class="mut" style="font-size:.9em">Trung tâm điều hành của Sơn</span></header>
+<header class="wrap top"><a class="logo" href="/" aria-label="MyLife — về trang chủ">${raw(LOGO_MARK_SVG)}<span>MYLIFE</span></a><span class="mut" style="font-size:.9em">Trung tâm điều hành của Sơn</span></header>
 <nav class="wrap tabs" aria-label="Không gian">${TABS.map(
     (t) => html`<a class="${t.id === opts.tab ? 'cur' : t.live ? '' : 'soon'}" href="${t.href}">${t.color ? html`<span class="gd" style="background:${t.color}"></span>` : ''}${t.label}${t.live ? '' : html` <span class="mut soonlbl" style="font-weight:500;font-size:.85em">· sắp có</span>`}</a>`
   )}</nav>

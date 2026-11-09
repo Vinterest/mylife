@@ -11,21 +11,24 @@ import { captureImages, createCapture, firstUrl, getCapture, imageData, listCapt
 import { ensureFullText, translateItem, viewOf } from './fulltext';
 import { JOBS, runJob } from './jobs';
 import { thumbSvg } from './views/thumb';
-import { APPLE_TOUCH_PNG_B64 } from './icon-png';
+import { APPLE_TOUCH_PNG_B64, ICON_192_PNG_B64, ICON_512_PNG_B64 } from './icon-png';
+import { appIconSvg, FAVICON_SVG } from './brand';
 import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
 import { ensureSchema } from './schema';
 
 const app = new Hono<{ Bindings: Env }>();
 
 /* ---------- Tài nguyên tĩnh (không cần đăng nhập để iPhone tải được biểu tượng) ---------- */
-const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0077B6"/><text x="32" y="44" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" fill="#fff" text-anchor="middle">M</text></svg>`;
+const pngBody = (b64: string) => Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+const IMG_CACHE = 'public, max-age=604800';
 
 app.get('/app.css', (c) => c.body(CSS + READER_CSS + CAPTURE_CSS, 200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }));
-app.get('/icon.svg', (c) => c.body(ICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }));
-app.get('/apple-touch-icon.png', (c) => {
-  const bin = Uint8Array.from(atob(APPLE_TOUCH_PNG_B64), (ch) => ch.charCodeAt(0));
-  return c.body(bin, 200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
-});
+// Logo "Sao dẫn đường" (phương án 5): xem src/brand.ts
+app.get('/icon.svg', (c) => c.body(appIconSvg(true), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': IMG_CACHE }));
+app.get('/favicon.svg', (c) => c.body(FAVICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': IMG_CACHE }));
+app.get('/apple-touch-icon.png', (c) => c.body(pngBody(APPLE_TOUCH_PNG_B64), 200, { 'Content-Type': 'image/png', 'Cache-Control': IMG_CACHE }));
+app.get('/icon-192.png', (c) => c.body(pngBody(ICON_192_PNG_B64), 200, { 'Content-Type': 'image/png', 'Cache-Control': IMG_CACHE }));
+app.get('/icon-512.png', (c) => c.body(pngBody(ICON_512_PNG_B64), 200, { 'Content-Type': 'image/png', 'Cache-Control': IMG_CACHE }));
 app.get('/manifest.webmanifest', (c) =>
   c.json({
     name: 'MyLife',
@@ -35,8 +38,10 @@ app.get('/manifest.webmanifest', (c) =>
     background_color: '#ffffff',
     theme_color: '#ffffff',
     icons: [
-      { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
-      { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
+      { src: '/apple-touch-icon.png?v=5', sizes: '180x180', type: 'image/png' },
+      { src: '/icon-192.png?v=5', sizes: '192x192', type: 'image/png' },
+      { src: '/icon-512.png?v=5', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+      { src: '/icon.svg?v=5', sizes: 'any', type: 'image/svg+xml' },
     ],
   })
 );
