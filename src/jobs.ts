@@ -7,7 +7,7 @@ import { vnDay } from './util';
 /*
  * Gói Workers miễn phí: mỗi lượt chạy tối đa 50 truy vấn D1, 50 yêu cầu mạng và ~10 ms CPU.
  * Vì vậy thay vì 1 lượt lớn crawl hết 14 nguồn, mỗi 5 phút chạy một "nhịp" nhỏ:
- *   1. Chọn 5 bài Đáng đọc nếu đã qua 06:30 mà hôm nay chưa chọn (+ dọn bài cũ).
+ *   1. Chọn 50 bài Đáng đọc nếu đã qua 06:30 mà hôm nay chưa chọn (+ dọn bài cũ).
  *   2. Crawl đúng 1 nguồn đến hạn (RSS mỗi 6 giờ, arXiv sau 06:00 hằng ngày).
  *   3. Dịch tiếp tối đa 2 lô cho bài anh đã bấm "Dịch bài này".
  *   4. Tự lấy toàn văn (không dịch) cho 1 bài.

@@ -155,7 +155,7 @@ ${lateMin > 20
         ['tick', 'Chạy 1 nhịp ngay'],
         ['crawl-rss', 'Crawl lại tất cả RSS'],
         ['crawl-arxiv', 'Crawl lại arXiv'],
-        ['picks', 'Chọn lại 5 bài Đáng đọc'],
+        ['picks', 'Chọn lại 50 bài Đáng đọc'],
       ].map(([id, label]) => html`<form method="post" action="/admin/run/${id}"><button class="btn2" style="width:100%" type="submit">${label}</button></form>`)}
     </div>
     <div class="box">

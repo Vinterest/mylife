@@ -1,10 +1,11 @@
 import type { Env, ItemRow } from './types';
 import { scoreItem, vnDay } from './util';
 
-const PICKS = 5;
-const MAX_PER_CHANNEL = 2;
+export const PICKS = 50;
+// Mỗi kênh tối đa 20 bài để danh sách không bị một kênh chiếm hết.
+const MAX_PER_CHANNEL = 20;
 
-/** Chọn 5 bài "Đáng đọc" cho ngày (giờ VN). Ưu tiên bài đã có tóm tắt tiếng Việt. */
+/** Chọn tối đa 50 bài "Đáng đọc" cho ngày (giờ VN), trong các bài 72 giờ qua chưa đọc. */
 export async function makePicks(env: Env, day = vnDay()): Promise<string> {
   const since = new Date(Date.now() - 72 * 3600000).toISOString();
   const { results } = await env.DB.prepare(

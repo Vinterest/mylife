@@ -1,13 +1,13 @@
 # MyLife — V1 (phương án C · Học tập AI)
 
-Trang cá nhân của Sơn tại **mylife.gm-chess.com**. V1 chạy mục tiêu G2 · Học tập AI: tự lấy bài (cả toàn văn) từ arXiv và RSS, chọn 5 bài "Đáng đọc" mỗi sáng, chỉ dịch tiếng Việt khi anh bấm "Dịch bài này".
+Trang cá nhân của Sơn tại **mylife.gm-chess.com**. V1 chạy mục tiêu G2 · Học tập AI: tự lấy bài (cả toàn văn) từ arXiv và RSS, chọn 50 bài "Đáng đọc" mỗi sáng, chỉ dịch tiếng Việt khi anh bấm "Dịch bài này".
 
 Tài liệu yêu cầu: [docs/V1-PRD-TRD.md](docs/V1-PRD-TRD.md)
 
 ## Đã có ở Chặng 1
 
 - Khung giao diện C (Lexend Deca, chữ 13px, tab không gian; các tab khác "sắp có").
-- Trang Học tập AI: 5 bài Đáng đọc có điểm, KPI G2.2 theo kênh, ô hạn mức, 4 cột kênh.
+- Trang Học tập AI: 50 bài Đáng đọc có điểm, KPI G2.2 theo kênh, ô hạn mức, 4 cột kênh.
 - 4 trang kênh (phân trang), trang bài (tóm tắt AI + mô tả gốc tiếng Anh), nút Giữ / Không quan tâm.
 - Trang Nguồn & hạn mức: bảng hạn mức, tình trạng từng nguồn, nhật ký, nút "Chạy ngay".
 - Crawl: RSS mỗi 6 giờ, arXiv 06:00 hằng ngày; lọc trùng; chấm điểm theo kênh, độ mới, từ khóa, nguồn.
@@ -63,7 +63,7 @@ Yêu cầu: tên miền gm-chess.com đã dùng DNS của Cloudflare.
    `npx wrangler secret put GEMINI_API_KEY`
 5. Deploy: `npm run deploy` — Worker tự gắn vào mylife.gm-chess.com.
 6. Bật đăng nhập: Cloudflare Dashboard → Zero Trust → Access → Applications → **Self-hosted**, domain `mylife.gm-chess.com`, policy **Allow** với email `son.phanhong@gmail.com`, đăng nhập bằng **One-time PIN**. Riêng 4 đường dẫn `/manifest.webmanifest`, `/apple-touch-icon.png`, `/icon.svg`, `/sw.js` thêm một application **Bypass** để iPhone tải được biểu tượng.
-7. Vào **Nguồn & hạn mức** → "Crawl arXiv", "Crawl RSS" → "Chọn 5 bài Đáng đọc" để có dữ liệu ngay.
+7. Vào **Nguồn & hạn mức** → "Crawl arXiv", "Crawl RSS" → "Chọn lại 50 bài Đáng đọc" để có dữ liệu ngay.
 
 ## Thêm / tắt nguồn
 

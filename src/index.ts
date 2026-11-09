@@ -83,7 +83,7 @@ app.get('/hoc-tap', async (c) => {
   }
   const byChannel: Record<string, Awaited<ReturnType<typeof latestByChannel>>> = {};
   const pickIds = new Set(picks.map((p) => p.id));
-  for (const ch of CHANNEL_ORDER) byChannel[ch] = (await latestByChannel(env, ch, 8)).filter((i) => !pickIds.has(i.id)).slice(0, 4);
+  for (const ch of CHANNEL_ORDER) byChannel[ch] = (await latestByChannel(env, ch, 60)).filter((i) => !pickIds.has(i.id)).slice(0, 4);
   return c.html(homePage({ picks, byChannel, quota: await quotaSnapshot(env), weekly: await weeklyCounts(env) }));
 });
 
