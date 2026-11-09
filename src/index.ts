@@ -8,7 +8,7 @@ import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
 import { SPEAK_CSS } from './views/speak';
 import { CAPTURE_CSS, capturePage, inboxPage, notebookPage } from './views/capture';
-import { captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, processCapture, validateCapture, type NewCapture } from './capture';
+import { olderCaptures, captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, processCapture, validateCapture, type NewCapture } from './capture';
 import { ensureFullText, translateStep, viewOf } from './fulltext';
 import { QuotaExhausted } from './ai/providers';
 import { JOBS, runJob } from './jobs';
@@ -256,7 +256,7 @@ app.get('/hoc-tap/hop-nhat/:id{[0-9]+}', async (c) => {
   const cap = await getCapture(c.env, Number(c.req.param('id')));
   if (!cap) return c.notFound();
   const item = cap.item_id ? await getItem(c.env, cap.item_id) : null;
-  return c.html(capturePage(cap, await captureImages(c.env, cap.id), item));
+  return c.html(capturePage(cap, await captureImages(c.env, cap.id), item, await olderCaptures(c.env, cap)));
 });
 
 app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xong|xoa|ghi-chu|xu-ly-lai}', async (c) => {

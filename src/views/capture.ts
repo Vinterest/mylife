@@ -129,7 +129,7 @@ export function inboxPage(p: { items: CaptureRow[]; done: number; showDone: bool
   return page({ title: 'Hộp nhặt', tab: 'g2', sub: g2Sub('inbox'), body });
 }
 
-export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow | null) {
+export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow | null, older: CaptureRow[]) {
   const pending = c.status === 'new' || imgs.some((i) => i.ocr_status === 'pending');
   const back = `/hoc-tap/hop-nhat/${c.id}`;
   const body = html`
@@ -161,13 +161,15 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
       <details style="display:inline-block"><summary class="meta" style="cursor:pointer">Xóa…</summary><form method="post" action="/hoc-tap/hop-nhat/${c.id}/xoa" style="margin-top:.4em"><button class="btn2" style="color:#9A2A14;border-color:#9A2A14" type="submit">Xóa hẳn mục này và ảnh</button></form></details>
     </div>
   </article>
-  <aside class="colside" style="max-width:320px">
-    <form class="box cap-form" method="post" action="/hoc-tap/hop-nhat/${c.id}/ghi-chu">
-      <span class="kick">Sửa nội dung</span>
-      <textarea name="note" rows="10" style="min-height:12em" placeholder="Dán hoặc sửa nội dung bài…">${c.note ?? ''}</textarea>
-      <button class="btn2" type="submit">Lưu nội dung</button>
-    </form>
-  </aside>
+</section>
+<section class="cols" id="cu-hon" style="margin-top:1.6em">
+  <div class="colmain" style="max-width:820px">
+    <div class="sh"><h2>10 mục nhặt trước mục này</h2><span class="meta">mới hơn trước · gồm cả mục đã xử lý</span></div>
+    ${older.length
+      ? older.map((o) => capRow(o, `/hoc-tap/hop-nhat/${c.id}`))
+      : html`<div class="empty">Đây là mục nhặt cũ nhất.</div>`}
+    ${older.length === 10 ? html`<div class="pager"><span></span><a class="btn2" href="/hoc-tap/hop-nhat/${older[9].id}#cu-hon">Xem 10 mục cũ hơn nữa ›</a></div>` : ''}
+  </div>
 </section>`;
   return page({ title: c.title || 'Mục nhặt', tab: 'g2', sub: g2Sub('inbox'), body });
 }

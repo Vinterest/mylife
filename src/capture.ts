@@ -116,6 +116,19 @@ export async function listCaptures(env: Env, where: string, limit = 60): Promise
   return results;
 }
 
+/** 10 mục nhặt ngay trước mục đang xem (cũ hơn), gồm cả mục đã xử lý — để tra cứu lần ngược không sót. */
+export async function olderCaptures(env: Env, cap: CaptureRow, limit = 10): Promise<CaptureRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT c.*,
+       (SELECT GROUP_CONCAT(id) FROM capture_images WHERE capture_id = c.id) AS img_ids,
+       (SELECT SUBSTR(ocr_text, 1, 400) FROM capture_images WHERE capture_id = c.id AND ocr_text IS NOT NULL ORDER BY id LIMIT 1) AS ocr_preview,
+       (SELECT COUNT(*) FROM capture_images WHERE capture_id = c.id AND ocr_status = 'pending') AS ocr_pending
+     FROM captures c WHERE (c.created_at < ?1 OR (c.created_at = ?1 AND c.id < ?2))
+     ORDER BY c.created_at DESC, c.id DESC LIMIT ?3`
+  ).bind(cap.created_at, cap.id, limit).all<CaptureRow>();
+  return results;
+}
+
 export async function imageData(env: Env, imgId: number): Promise<{ mime: string; data: Uint8Array } | null> {
   const r = await env.DB.prepare('SELECT mime, data FROM capture_images WHERE id = ?').bind(imgId).first<{ mime: string; data: ArrayBuffer | number[] }>();
   if (!r) return null;
