@@ -11,6 +11,8 @@ const title = (it: ItemRow) => it.title_en;
 /** Bài vừa về MyLife trong 3 giờ qua. */
 const isNew = (it: ItemRow) => Date.now() - new Date(it.fetched_at).getTime() < 3 * 3600000;
 
+const newBadge = (it: ItemRow) => (isNew(it) ? html`<img class="newb" src="/new.svg" alt="Mới" title="Vừa về MyLife trong 3 giờ qua" width="64" height="26">` : '');
+
 /** Nút chuyển cách xếp: mới nhất trước / điểm cao trước. */
 function sortSwitch(base: string, sort: SortMode) {
   const sep = base.includes('?') ? '&' : '?';
@@ -44,7 +46,7 @@ function readRow(it: ItemRow, back: string) {
   ${thumb(it)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
     <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}</span>
-    <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${isNew(it) ? html`<span class="new">Mới</span> ` : ''}${title(it)}</a>
+    <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${newBadge(it)}${title(it)}</a>
     <p class="sum" lang="en">${snippet(it)}</p>
     ${itemActions(it, back)}
   </div>
@@ -91,8 +93,8 @@ export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Recor
     ${(p.byChannel[c] ?? []).length
       ? (p.byChannel[c] ?? []).map((it, i) =>
           i === 0
-            ? html`<div class="lead">${thumb(it, 'lg')}<a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div>`
-            : html`<div class="lix">${thumb(it, 'sm')}<div><a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div></div>`
+            ? html`<div class="lead">${thumb(it, 'lg')}<a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${newBadge(it)}${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div>`
+            : html`<div class="lix">${thumb(it, 'sm')}<div><a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${newBadge(it)}${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div></div>`
         )
       : html`<div class="meta">Chưa có bài.</div>`}
   </div>`

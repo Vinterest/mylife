@@ -50,6 +50,9 @@ app.get('/thumb/:id{[a-z0-9-]+\\.svg}', async (c) => {
   const src = c.env.DB ? await c.env.DB.prepare('SELECT name, channel FROM sources WHERE id = ?').bind(id).first<{ name: string; channel: string }>().catch(() => null) : null;
   return c.body(thumbSvg(src?.name ?? 'MyLife', src?.channel ?? 'ai'), 200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
 });
+// Nhãn "NEW" cho bài vừa về (ảnh SVG, trình duyệt lưu đệm 1 ngày)
+const NEW_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 26" width="64" height="26"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF3B5C"/><stop offset="1" stop-color="#FF8A00"/></linearGradient></defs><rect x="1" y="1" width="62" height="24" rx="12" fill="url(#g)"/><rect x="1" y="1" width="62" height="11" rx="6" fill="#fff" opacity=".18"/><path d="M13 6.2l1.5 4.3 4.3 1.5-4.3 1.5L13 17.8l-1.5-4.3L7.2 12l4.3-1.5z" fill="#fff"/><text x="38.5" y="17.6" font-family="Arial Black,Arial,Helvetica,sans-serif" font-size="12.5" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing=".6">NEW</text></svg>`;
+app.get('/new.svg', (c) => c.body(NEW_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }));
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 
 /* ---------- Bảo vệ: chỉ chủ sở hữu (qua Cloudflare Access) ---------- */
