@@ -1,6 +1,7 @@
 import { html, raw } from 'hono/html';
 import type { HtmlEscapedString } from 'hono/utils/html';
 import { CHANNELS, CHANNEL_ORDER, vnDateLong } from '../util';
+import type { Channel } from '../types';
 
 type H = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -29,6 +30,8 @@ header.top{display:flex;align-items:center;gap:1em;flex-wrap:wrap;padding-top:.9
 .sub a{color:#2D3946}
 .sub a.cur{color:var(--ac);font-weight:700}
 .sub a.soon{color:#6B7782}
+.sub .cnt{display:inline-block;margin-left:.3em;font-weight:600;color:var(--ac)}
+.sub .cnt.z{color:#8A949D;font-weight:400}
 main{padding-top:1.2em;padding-bottom:3em;display:flex;flex-direction:column;gap:1.8em}
 .kick{font-size:.82em;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ac)}
 .sh{display:flex;align-items:baseline;gap:.8em;border-top:2px solid var(--ac);padding-top:.55em;margin:0 0 .4em;flex-wrap:wrap}
@@ -106,7 +109,7 @@ export function g2Sub(cur: string): H {
     { id: 'quota', label: 'Nguồn & hạn mức', href: '/hoc-tap/han-muc', live: true },
   ];
   return html`<nav class="wrap sub" aria-label="Học tập AI">${items.map(
-    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}</a>`
+    (i) => html`<a class="${i.id === cur ? 'cur' : i.live ? '' : 'soon'}" href="${i.href}">${i.label}${CHANNEL_ORDER.includes(i.id as Channel) ? raw(`<!--cnt:${i.id}-->`) : ''}</a>`
   )}</nav>`;
 }
 

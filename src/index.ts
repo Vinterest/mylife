@@ -10,7 +10,7 @@ import { ensureFullText, translateItem, viewOf } from './fulltext';
 import { JOBS, runJob } from './jobs';
 import { thumbSvg } from './views/thumb';
 import { APPLE_TOUCH_PNG_B64 } from './icon-png';
-import { CHANNEL_ORDER, channelBySlug } from './util';
+import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
 import { ensureSchema } from './schema';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -63,6 +63,29 @@ app.use('*', async (c, next) => {
   }
   await ensureSchema(c.env);
   return next();
+});
+
+/**
+ * Số bài mới về hôm nay (giờ VN) mà anh chưa đọc, gắn cạnh tên tab kênh: "AI thế giới (10)".
+ * Trang chỉ để chỗ <!--cnt:kênh-->, ở đây điền số bằng 1 truy vấn cho cả 4 kênh.
+ */
+app.use('/hoc-tap*', async (c, next) => {
+  await next();
+  if (c.req.method !== 'GET' || !c.res.headers.get('Content-Type')?.includes('text/html')) return;
+  const body = await c.res.text();
+  if (!body.includes('<!--cnt:')) { c.res = new Response(body, c.res); return; }
+  const startVn = new Date(`${vnDay()}T00:00:00+07:00`).toISOString();
+  const { results } = await c.env.DB.prepare(
+    'SELECT channel, COUNT(*) AS n FROM items WHERE read_at IS NULL AND dismissed = 0 AND fetched_at >= ? GROUP BY channel'
+  ).bind(startVn).all<{ channel: string; n: number }>();
+  const cnt = Object.fromEntries(results.map((r) => [r.channel, r.n]));
+  const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
+    const n = cnt[ch] ?? 0;
+    return `<span class="cnt${n ? '' : ' z'}" title="Bài mới hôm nay chưa đọc">(${n})</span>`;
+  });
+  const headers = new Headers(c.res.headers);
+  headers.delete('Content-Length');
+  c.res = new Response(out, { status: c.res.status, headers });
 });
 
 /** Chặn POST từ trang khác (chống CSRF đơn giản). */
