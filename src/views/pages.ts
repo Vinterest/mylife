@@ -11,7 +11,8 @@ const title = (it: ItemRow) => it.title_vi || it.title_en;
 /** Ngôn ngữ của tiêu đề đang hiện (cho trình đọc màn hình, giọng đọc). */
 const tl = (it: ItemRow) => (it.title_vi ? 'vi' : isThai(it.title_en) ? 'th' : 'en');
 /** Nhãn cho bài tiếng Thái đã tự dịch. */
-export const thaiTag = (it: ItemRow) => (isThai(it.title_en) ? html`<span class="thtag">Dịch từ tiếng Thái</span>` : '');
+export const thaiTag = (it: ItemRow) =>
+  !isThai(it.title_en) ? '' : it.title_vi ? html`<span class="thtag">Dịch từ tiếng Thái</span>` : html`<span class="thtag wait">Tiếng Thái · chưa dịch</span>`;
 
 /** Bài vừa về MyLife trong 3 giờ qua. */
 const isNew = (it: ItemRow) => Date.now() - new Date(it.fetched_at).getTime() < 3 * 3600000;

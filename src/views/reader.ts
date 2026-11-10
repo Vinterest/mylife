@@ -146,7 +146,7 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
     </div>
     <div class="kick">${CHANNELS[it.channel].name}${isPaper ? ' · Paper nghiên cứu' : ''} · Điểm ${it.score}</div>
     <h1 class="t1" style="margin:.35em 0 .25em;font-size:2em" lang="${it.title_vi ? 'vi' : src}">${title}</h1>
-    ${src === 'th' ? html`<div style="display:flex;gap:.5em;align-items:center;flex-wrap:wrap;margin-bottom:.6em"><span class="st" style="background:#FFF1E0;color:#8A4B0A">Dịch từ tiếng Thái</span>${it.title_vi ? html`<span class="meta" lang="th">${it.title_en}</span>` : ''}</div>` : ''}
+    ${src === 'th' ? html`<div style="display:flex;gap:.5em;align-items:center;flex-wrap:wrap;margin-bottom:.6em"><span class="st" style="background:#FFF1E0;color:#8A4B0A">${it.title_vi ? 'Dịch từ tiếng Thái' : 'Tiếng Thái · chưa dịch'}</span>${it.title_vi ? html`<span class="meta" lang="th">${it.title_en}</span>` : ''}</div>` : ''}
     <div class="meta" style="margin:.5em 0 1.2em">${it.authors ? `${it.authors} · ` : ''}${it.source_name} · đăng ${timeAgoVi(it.published_at)} · lấy về MyLife ${timeAgoVi(v.row.fetched_at)} · ${Math.max(1, Math.round(v.row.chars_en / 1100))} phút đọc</div>
     ${stateBanner(it, v)}
     <div class="rd-body" id="rd">${v.blocks.length ? bodyHtml(v, lang, it.title_en, src) : html`<p class="meta">Nguồn không có nội dung để hiển thị.</p>`}</div>

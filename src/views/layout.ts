@@ -64,6 +64,7 @@ h1.t1{font-size:1.75em;line-height:1.25;font-weight:700;margin:0}
 .seg.sm{margin-left:auto;font-size:.85em}
 .seg.sm a{padding:0 .8em;min-height:30px}
 .thtag{display:inline-block;align-self:flex-start;font-size:.72em;font-weight:600;background:#FFF1E0;color:#8A4B0A;border-radius:4px;padding:.1em .45em;margin-right:.4em;vertical-align:.1em}
+.thtag.wait{background:#EEF1F4;color:#4A5866}
 .lead{display:flex;flex-direction:column;gap:.25em;padding:0 0 .7em}
 .lix{display:flex;gap:.65em;align-items:flex-start;padding:.6em 0;border-top:1px solid var(--line)}
 .lix>div{display:flex;flex-direction:column;gap:.25em;min-width:0}
@@ -136,7 +137,7 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=17">
+<link rel="stylesheet" href="/app.css?v=18">
 <title>${opts.title} · MyLife</title>
 </head>
 <body>
