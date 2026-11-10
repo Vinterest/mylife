@@ -65,7 +65,7 @@ export function searchPage(p: { q: string; scope: Scope; items: ItemHit[]; captu
     ${p.items.length ? html`<div class="sh" style="margin-top:1.2em"><h2>Bài · ${p.items.length}</h2>${p.items.length >= 40 ? html`<span class="meta">hiện 40 kết quả khớp nhất — thêm từ khóa để thu hẹp</span>` : ''}</div>
       ${p.items.map((it) => html`<article class="hit">${thumb(it)}<div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
         <span class="kick">${CHANNELS[it.channel].short} · ${it.source_name} · ${timeAgoVi(it.published_at)}${it.read_at ? ' · đã đọc' : ''}${it.kept ? ' · Sổ tay' : ''}</span>
-        <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${hl(it.title_en, p.q)}</a>
+        <a class="t2" href="/hoc-tap/bai/${it.id}">${hl(it.title_vi || it.title_en, p.q)}</a>
         ${it.snip ? html`<p class="snip">${hl(snipText(it.snip), p.q)}</p>` : ''}
       </div></article>`)}` : ''}
     ${!total ? html`<div class="empty" style="margin-top:1em">Thử từ khóa ngắn hơn, bỏ bớt từ, hoặc chọn “Tất cả”. Nội dung bài tìm theo đúng chữ (có dấu như trong bài); tiêu đề bài tìm được cả không dấu.</div>` : ''}

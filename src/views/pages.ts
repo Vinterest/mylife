@@ -3,10 +3,15 @@ import { CHANNELS, CHANNEL_ORDER, timeAgoVi } from '../util';
 import { g2Sub, html, page } from './layout';
 import type { quotaSnapshot } from '../ai/quota';
 import type { SortMode } from '../db';
+import { isThai } from '../thai';
 
 type Quota = Awaited<ReturnType<typeof quotaSnapshot>>;
 
-const title = (it: ItemRow) => it.title_en;
+const title = (it: ItemRow) => it.title_vi || it.title_en;
+/** Ngôn ngữ của tiêu đề đang hiện (cho trình đọc màn hình, giọng đọc). */
+const tl = (it: ItemRow) => (it.title_vi ? 'vi' : isThai(it.title_en) ? 'th' : 'en');
+/** Nhãn cho bài tiếng Thái đã tự dịch. */
+export const thaiTag = (it: ItemRow) => (isThai(it.title_en) ? html`<span class="thtag">Dịch từ tiếng Thái</span>` : '');
 
 /** Bài vừa về MyLife trong 3 giờ qua. */
 const isNew = (it: ItemRow) => Date.now() - new Date(it.fetched_at).getTime() < 3 * 3600000;
@@ -20,8 +25,10 @@ function sortSwitch(base: string, sort: SortMode) {
 }
 
 function snippet(it: ItemRow) {
-  const a = (it.abstract_en ?? '').slice(0, 240);
-  return a ? `${a}${(it.abstract_en ?? '').length > 240 ? '…' : ''}` : '';
+  // Bài tiếng Thái: hiện đoạn mô tả đã dịch (lưu ở summary_vi).
+  const src = isThai(it.title_en) && it.summary_vi ? it.summary_vi : it.abstract_en ?? '';
+  const a = src.slice(0, 240);
+  return a ? `${a}${src.length > 240 ? '…' : ''}` : '';
 }
 
 /** Ảnh đại diện: thumbnail của nguồn; không có (hoặc ảnh lỗi) → ảnh tự vẽ theo tên nguồn. */
@@ -44,9 +51,9 @@ function readRow(it: ItemRow, back: string) {
   return html`<article class="rw">
   ${thumb(it)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
-    <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}</span>
-    <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${newBadge(it)}${title(it)}</a>
-    <p class="sum" lang="en">${snippet(it)}</p>
+    <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}</span>${thaiTag(it)}
+    <a class="t2" href="/hoc-tap/bai/${it.id}" lang="${tl(it)}">${newBadge(it)}${title(it)}</a>
+    <p class="sum" lang="${isThai(it.title_en) && it.summary_vi ? 'vi' : isThai(it.abstract_en) ? 'th' : 'en'}">${snippet(it)}</p>
     ${itemActions(it, back)}
   </div>
 </article>`;
@@ -92,8 +99,8 @@ export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Recor
     ${(p.byChannel[c] ?? []).length
       ? (p.byChannel[c] ?? []).map((it, i) =>
           i === 0
-            ? html`<div class="lead">${thumb(it, 'lg')}<a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${newBadge(it)}${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div>`
-            : html`<div class="lix">${thumb(it, 'sm')}<div><a class="t3" href="/hoc-tap/bai/${it.id}" lang="en">${newBadge(it)}${title(it)}</a><span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span></div></div>`
+            ? html`<div class="lead">${thumb(it, 'lg')}<a class="t3" href="/hoc-tap/bai/${it.id}" lang="${tl(it)}">${newBadge(it)}${title(it)}</a><span class="meta">${thaiTag(it)}${it.source_name} · ${timeAgoVi(it.published_at)}</span></div>`
+            : html`<div class="lix">${thumb(it, 'sm')}<div><a class="t3" href="/hoc-tap/bai/${it.id}" lang="${tl(it)}">${newBadge(it)}${title(it)}</a><span class="meta">${thaiTag(it)}${it.source_name} · ${timeAgoVi(it.published_at)}</span></div></div>`
         )
       : html`<div class="meta">Chưa có bài.</div>`}
   </div>`

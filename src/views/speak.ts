@@ -41,7 +41,7 @@ function split(t){t=t.replace(/^•\\s*/,'').replace(/\\s+/g,' ').trim();var out
 function mark(){document.querySelectorAll('.speaking').forEach(function(e){e.classList.remove('speaking')});var e=els[idx];if(e){e.classList.add('speaking');e.scrollIntoView({block:'center',behavior:'smooth'})}
   st.textContent=(playing?'Đang đọc':'Tạm dừng')+' · đoạn '+(idx+1)+'/'+els.length;bp.textContent=playing?'❚❚':'▶';bp.setAttribute('aria-label',playing?'Tạm dừng':'Đọc tiếp')}
 function speakPart(){if(!playing)return;if(pi>=parts.length){idx++;if(idx>=els.length){stop(true);return}startEl();return}
-  var e=els[idx],l=langOf(e),u=new SpeechSynthesisUtterance(parts[pi]);u.lang=l==='en'?'en-US':'vi-VN';var v=voiceFor(l==='en'?'en':'vi');if(v)u.voice=v;u.rate=rate;
+  var e=els[idx],l=langOf(e),u=new SpeechSynthesisUtterance(parts[pi]);var L=l==='en'||l==='th'?l:'vi';u.lang={en:'en-US',th:'th-TH',vi:'vi-VN'}[L];var v=voiceFor(L);if(v)u.voice=v;u.rate=rate;
   if(l!=='en'&&!voiceFor('vi')&&!speakPart.warned){speakPart.warned=1;st.textContent='Máy chưa có giọng tiếng Việt — xem hướng dẫn cài trong Cài đặt'}
   u.onend=function(){if(u._x)return;speakPart.bad=0;pi++;speakPart()};u.onerror=function(ev){if(ev.error==='interrupted'||ev.error==='canceled'||u._x)return;u._x=1;if(++speakPart.bad>=3){playing=false;wake(false);st.textContent='Máy không đọc được ('+ev.error+'). Kiểm tra giọng đọc trong Cài đặt rồi bấm ▶';bp.textContent='▶';return}pi++;speakPart()};
   speakPart.cur=u;syn.speak(u)}

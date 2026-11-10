@@ -37,7 +37,7 @@ export async function searchItems(env: Env, q: string, scope: Scope): Promise<It
   if ((CHANNEL_ORDER as string[]).includes(scope)) where.push(`i.channel = '${scope}'`);
   if (scope === 'da-doc') where.push('i.read_at IS NOT NULL');
   if (scope === 'so-tay') where.push("i.kept = 1 AND i.source_id <> 'manual'");
-  const titleHit = `(${has('i.title_en')} OR (length(?2) > 2 AND i.title_key LIKE '%' || ?2 || '%'))`;
+  const titleHit = `(${has('i.title_en')} OR ${has('i.title_vi')} OR (length(?2) > 2 AND i.title_key LIKE '%' || ?2 || '%'))`;
   const { results } = await env.DB.prepare(
     `SELECT i.*, s.name AS source_name, s.weight AS source_weight,
        (CASE WHEN ${titleHit} THEN 4 ELSE 0 END

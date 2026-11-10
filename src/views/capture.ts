@@ -192,7 +192,7 @@ export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[] }) {
         <a class="th" href="/hoc-tap/bai/${it.id}" tabindex="-1" aria-hidden="true"><img src="${it.image_url || `/thumb/${it.source_id}.svg`}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/thumb/${it.source_id}.svg'"></a>
         <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
           <span class="kick">${chName(it.channel)} · bài đã giữ</span>
-          <a class="t2" href="/hoc-tap/bai/${it.id}" lang="en">${it.title_en}</a>
+          <a class="t2" href="/hoc-tap/bai/${it.id}">${it.title_vi || it.title_en}</a>
           ${it.note ? html`<div class="why"><b>Ghi chú:</b> ${it.note}</div>` : ''}
           <span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span>
         </div>

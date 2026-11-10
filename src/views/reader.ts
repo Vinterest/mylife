@@ -2,6 +2,7 @@ import type { ItemRow } from '../types';
 import type { FullTextView } from '../fulltext';
 import { CHANNELS, timeAgoVi } from '../util';
 import { g2Sub, html, page, raw } from './layout';
+import { isThai } from '../thai';
 import { SPEAK_BAR, SPEAK_JS, speakButton } from './speak';
 
 export type Lang = 'vi' | 'en' | 'bi';
@@ -54,7 +55,7 @@ function isRepeatedTitle(v: FullTextView, i: number, titleEn: string) {
   return a === t || (t.length >= 15 && (a.startsWith(t) || t.startsWith(a)));
 }
 
-function bodyHtml(v: FullTextView, lang: Lang, titleEn: string) {
+function bodyHtml(v: FullTextView, lang: Lang, titleEn: string, src: 'en' | 'th' = 'en') {
   return v.blocks.map((b, i) => {
     if (isRepeatedTitle(v, i, titleEn)) return '';
     if (b.k === 'img') {
@@ -62,11 +63,11 @@ function bodyHtml(v: FullTextView, lang: Lang, titleEn: string) {
       return html`<figure><img src="${b.src}" alt="${alt}" loading="lazy" referrerpolicy="no-referrer"></figure>`;
     }
     const vi = v.vi[i];
-    if (lang === 'en' || b.k === 'pre') return blockHtml(b.k, b.t, i, '', 'en');
+    if (lang === 'en' || b.k === 'pre') return blockHtml(b.k, b.t, i, '', src);
     if (lang === 'bi') {
-      return html`<div class="bi"><div>${blockHtml(b.k, vi ?? '—', i)}</div><div>${blockHtml(b.k, b.t, -1, 'en', 'en')}</div></div>`;
+      return html`<div class="bi"><div>${blockHtml(b.k, vi ?? '—', i)}</div><div>${blockHtml(b.k, b.t, -1, 'en', src)}</div></div>`;
     }
-    return vi != null ? blockHtml(b.k, vi, i) : blockHtml(b.k, b.t, i, 'untr', 'en');
+    return vi != null ? blockHtml(b.k, vi, i) : blockHtml(b.k, b.t, i, 'untr', src);
   });
 }
 
@@ -124,7 +125,9 @@ function stateBanner(it: ItemRow, v: FullTextView) {
 
 export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
   const heads = v.blocks.map((b, i) => ({ b, i })).filter(({ b, i }) => (b.k === 'h2' || b.k === 'h3') && !isRepeatedTitle(v, i, it.title_en));
-  const title = it.title_en;
+  // Bài tiếng Thái: tự dịch (tiêu đề tiếng Việt + nhãn "Dịch từ tiếng Thái"); bản gốc là tiếng Thái.
+  const src: 'en' | 'th' = isThai(it.title_en) || v.blocks.some((b) => isThai(b.t)) ? 'th' : 'en';
+  const title = it.title_vi || it.title_en;
   const langLink = (l: Lang, label: string) => html`<a class="${lang === l ? 'on' : ''}" href="/hoc-tap/bai/${it.id}?lang=${l}">${label}</a>`;
   const isPaper = v.row.kind === 'arxiv_html';
 
@@ -133,7 +136,7 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
   <article class="colmain" style="max-width:780px">
     <div class="meta"><a href="/hoc-tap">Học tập AI</a> › <a href="/hoc-tap/kenh/${CHANNELS[it.channel].slug}">${CHANNELS[it.channel].short}</a></div>
     <div class="rd-tools">
-      <div class="seg" role="group" aria-label="Ngôn ngữ">${langLink('vi', 'Tiếng Việt')}${langLink('en', 'English')}${langLink('bi', 'Song ngữ')}</div>
+      <div class="seg" role="group" aria-label="Ngôn ngữ">${langLink('vi', 'Tiếng Việt')}${langLink('en', src === 'th' ? 'Gốc (tiếng Thái)' : 'English')}${langLink('bi', 'Song ngữ')}</div>
       <div class="seg" role="group" aria-label="Cỡ chữ"><button type="button" onclick="mlFs(-1)" aria-label="Chữ nhỏ hơn">A−</button><button type="button" onclick="mlFs(1)" aria-label="Chữ lớn hơn">A+</button></div>
       ${raw(speakButton())}
       <span style="margin-left:auto;display:flex;gap:.5em">
@@ -142,10 +145,11 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
       </span>
     </div>
     <div class="kick">${CHANNELS[it.channel].name}${isPaper ? ' · Paper nghiên cứu' : ''} · Điểm ${it.score}</div>
-    <h1 class="t1" style="margin:.35em 0 .25em;font-size:2em" lang="en">${title}</h1>
+    <h1 class="t1" style="margin:.35em 0 .25em;font-size:2em" lang="${it.title_vi ? 'vi' : src}">${title}</h1>
+    ${src === 'th' ? html`<div style="display:flex;gap:.5em;align-items:center;flex-wrap:wrap;margin-bottom:.6em"><span class="st" style="background:#FFF1E0;color:#8A4B0A">Dịch từ tiếng Thái</span>${it.title_vi ? html`<span class="meta" lang="th">${it.title_en}</span>` : ''}</div>` : ''}
     <div class="meta" style="margin:.5em 0 1.2em">${it.authors ? `${it.authors} · ` : ''}${it.source_name} · đăng ${timeAgoVi(it.published_at)} · lấy về MyLife ${timeAgoVi(v.row.fetched_at)} · ${Math.max(1, Math.round(v.row.chars_en / 1100))} phút đọc</div>
     ${stateBanner(it, v)}
-    <div class="rd-body" id="rd">${v.blocks.length ? bodyHtml(v, lang, it.title_en) : html`<p class="meta">Nguồn không có nội dung để hiển thị.</p>`}</div>
+    <div class="rd-body" id="rd">${v.blocks.length ? bodyHtml(v, lang, it.title_en, src) : html`<p class="meta">Nguồn không có nội dung để hiển thị.</p>`}</div>
     <div class="box" style="margin-top:1.6em;background:#F4F5F7;border:0;font-size:.9em;line-height:1.6">
       <span><b>Nguồn:</b> ${it.source_name}${it.authors ? ` · ${it.authors}` : ''} · <a href="${v.row.base_url ?? it.url}" target="_blank" rel="noopener" style="color:var(--ac);font-weight:600">Bản gốc ↗</a></span>
       <span class="meta">Bản lưu và bản dịch chỉ dùng cá nhân trong MyLife, không công khai. Bản dịch do máy/AI thực hiện, có thể chưa chính xác. Hình ảnh hiển thị từ trang gốc.</span>
