@@ -1,5 +1,17 @@
 /** Trích nội dung chính của một trang bằng HTMLRewriter (có sẵn trong Cloudflare Workers). */
 
+/**
+ * Ảnh rác không phải ảnh minh họa: emoji WordPress/Twitter chèn thành ảnh (😋…), mặt cười, biểu tượng nhỏ,
+ * điểm ảnh theo dõi. Không có kích thước ghi sẵn nên trước đây bị hiện to cả khung.
+ */
+const EMOJI_ALT = /^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D\s]+$/u;
+export function isJunkImage(src: string, alt = '', cls = ''): boolean {
+  if (/\b(emoji|wp-smiley|twemoji|smiley)\b/i.test(cls)) return true;
+  if (/s\.w\.org\/images\/core\/emoji|twemoji|\/emoji\/|\/smilies\/|\/emoticons?\/|pixel\.(gif|png)|1x1\.(gif|png)|gravatar\.com\/avatar/i.test(src)) return true;
+  if (alt && alt.length <= 8 && EMOJI_ALT.test(alt) && /\p{Extended_Pictographic}/u.test(alt)) return true;
+  return false;
+}
+
 export type BlockKind = 'h2' | 'h3' | 'p' | 'li' | 'quote' | 'pre' | 'img' | 'cap';
 export interface Block {
   k: BlockKind;
@@ -69,7 +81,9 @@ export async function extractBlocks(res: Response, baseUrl: string): Promise<Blo
         const src = e.getAttribute('src') || e.getAttribute('data-src');
         if (!src || src.startsWith('data:')) return;
         const w = Number(e.getAttribute('width') ?? '0');
-        if (w && w < 120) return; // biểu tượng nhỏ
+        const h = Number(e.getAttribute('height') ?? '0');
+        if ((w && w < 120) || (h && h < 80)) return; // biểu tượng nhỏ
+        if (isJunkImage(src, e.getAttribute('alt') ?? '', e.getAttribute('class') ?? '')) return; // emoji dạng ảnh
         try {
           out.push({ k: 'img', t: e.getAttribute('alt') ?? '', src: new URL(src, baseUrl).toString(), art: art > 0 });
         } catch { /* bỏ src lỗi */ }

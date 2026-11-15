@@ -1,5 +1,6 @@
 import type { ItemRow } from '../types';
 import type { FullTextView } from '../fulltext';
+import { isJunkImage } from '../fulltext/extract';
 import { CHANNELS, timeAgoVi } from '../util';
 import { g2Sub, html, page, raw } from './layout';
 import { capName, detectLang, isAuto, itemLang, LANG_NAME, type Lang as SrcLang } from '../lang';
@@ -59,6 +60,7 @@ function bodyHtml(v: FullTextView, lang: Lang, titleEn: string, src: SrcLang = '
   return v.blocks.map((b, i) => {
     if (isRepeatedTitle(v, i, titleEn)) return '';
     if (b.k === 'img') {
+      if (isJunkImage(b.src ?? '', b.t)) return ''; // bài lưu từ trước: vẫn ẩn emoji dạng ảnh
       const alt = lang === 'en' ? b.t : v.vi[i] ?? b.t;
       return html`<figure><img src="${b.src}" alt="${alt}" loading="lazy" referrerpolicy="no-referrer"></figure>`;
     }

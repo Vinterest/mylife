@@ -1,3 +1,4 @@
+import { isJunkImage } from '../fulltext/extract';
 import type { RawItem } from '../types';
 import { stripHtml } from '../util';
 
@@ -88,10 +89,12 @@ function findImage(block: string, html: string, base: string): string | undefine
   for (const t of html.match(/<img\b[^>]*>/gi) ?? []) {
     const w = Number(attr(t, 'width') || '0');
     if (w && w < 120) continue; // biểu tượng nhỏ, ảnh đếm lượt xem
-    cands.push(attr(t, 'src') || attr(t, 'data-src'));
+    const src = attr(t, 'src') || attr(t, 'data-src');
+    if (isJunkImage(src, attr(t, 'alt'), attr(t, 'class'))) continue; // emoji dạng ảnh
+    cands.push(src);
   }
   for (const c of cands) {
-    if (!c || c.startsWith('data:')) continue;
+    if (!c || c.startsWith('data:') || isJunkImage(c)) continue;
     try {
       const u = new URL(c, base);
       if (u.protocol === 'https:' || u.protocol === 'http:') return u.toString().replace(/^http:/, 'https:');
