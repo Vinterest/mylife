@@ -3,6 +3,11 @@ import type { Env } from '../types';
 import { addUsage, canUse, markExhausted, type Provider } from './quota';
 import { QuotaExhausted, RateLimited } from './providers';
 
+/** Mã ngôn ngữ nguồn theo từng dịch vụ (Lang của MyLife → mã của dịch vụ). */
+const AZURE_CODE: Record<string, string> = { zh: 'zh-Hans' };
+const GOOGLE_CODE: Record<string, string> = { zh: 'zh-CN' };
+const DEEPL_SRC = new Set(['en', 'id', 'ko', 'ja', 'zh', 'th']); // còn lại để DeepL tự nhận
+
 const chars = (arr: string[]) => arr.reduce((n, s) => n + s.length, 0);
 
 async function guard(env: Env, p: Provider, key: string | undefined, texts: string[]) {
@@ -12,7 +17,7 @@ async function guard(env: Env, p: Provider, key: string | undefined, texts: stri
 
 export async function azureTranslate(env: Env, texts: string[], src = 'en'): Promise<string[]> {
   await guard(env, 'azure', env.AZURE_TRANSLATOR_KEY, texts);
-  const res = await fetch(`https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=${src}&to=vi`, {
+  const res = await fetch(`https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=${AZURE_CODE[src] ?? src}&to=vi`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -34,7 +39,7 @@ export async function deeplTranslate(env: Env, texts: string[], src = 'en'): Pro
   const res = await fetch('https://api-free.deepl.com/v2/translate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `DeepL-Auth-Key ${env.DEEPL_API_KEY}` },
-    body: JSON.stringify({ text: texts, source_lang: src.toUpperCase(), target_lang: 'VI' }),
+    body: JSON.stringify({ text: texts, ...(DEEPL_SRC.has(src) ? { source_lang: src.toUpperCase() } : {}), target_lang: 'VI' }),
   });
   if (res.status === 429) throw new RateLimited('DeepL giới hạn tạm thời (429)');
   if (res.status === 456) { await markExhausted(env, 'deepl'); throw new QuotaExhausted(`DeepL ${res.status}`); }
@@ -49,7 +54,7 @@ export async function googleTranslate(env: Env, texts: string[], src = 'en'): Pr
   const res = await fetch(`https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(env.GOOGLE_TRANSLATE_API_KEY!)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ q: texts, source: src, target: 'vi', format: 'text' }),
+    body: JSON.stringify({ q: texts, source: GOOGLE_CODE[src] ?? src, target: 'vi', format: 'text' }),
   });
   if (res.status === 429) throw new RateLimited('Google giới hạn tạm thời (429)');
   if (res.status === 403) { await markExhausted(env, 'google_tr'); throw new QuotaExhausted(`Google ${res.status}`); }

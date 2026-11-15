@@ -2,7 +2,7 @@ import type { ItemRow } from '../types';
 import type { FullTextView } from '../fulltext';
 import { CHANNELS, timeAgoVi } from '../util';
 import { g2Sub, html, page, raw } from './layout';
-import { isThai } from '../thai';
+import { capName, detectLang, isAuto, itemLang, LANG_NAME, type Lang as SrcLang } from '../lang';
 import { SPEAK_BAR, SPEAK_JS, speakButton } from './speak';
 
 export type Lang = 'vi' | 'en' | 'bi';
@@ -55,7 +55,7 @@ function isRepeatedTitle(v: FullTextView, i: number, titleEn: string) {
   return a === t || (t.length >= 15 && (a.startsWith(t) || t.startsWith(a)));
 }
 
-function bodyHtml(v: FullTextView, lang: Lang, titleEn: string, src: 'en' | 'th' = 'en') {
+function bodyHtml(v: FullTextView, lang: Lang, titleEn: string, src: SrcLang = 'en') {
   return v.blocks.map((b, i) => {
     if (isRepeatedTitle(v, i, titleEn)) return '';
     if (b.k === 'img') {
@@ -88,7 +88,7 @@ step()})();`;
   return html`<div class="rd-state" style="flex-direction:column;align-items:stretch;gap:.45em"><div style="display:flex;gap:.6em;align-items:center;flex-wrap:wrap"><span class="st wait">Đang dịch…</span><span class="meta" id="trmsg">${pct}% · ${v.translatedCount}/${v.translatableCount} đoạn</span></div><div style="height:6px;background:#E3EAF0;border-radius:3px;overflow:hidden"><i id="trbar" style="display:block;height:100%;width:${pct}%;background:var(--ac);transition:width .4s"></i></div><span class="meta">Có thể đọc bản gốc trong lúc chờ; dịch xong trang tự chuyển sang tiếng Việt.</span></div><script>${raw(js)}</script>`;
 }
 
-function stateBanner(it: ItemRow, v: FullTextView) {
+function stateBanner(it: ItemRow, v: FullTextView, src: SrcLang = 'en') {
   const r = v.row;
   const pct = v.translatableCount ? Math.round((v.translatedCount / v.translatableCount) * 100) : 0;
   const notes = [];
@@ -101,9 +101,9 @@ function stateBanner(it: ItemRow, v: FullTextView) {
   if (v.translatableCount === 0) return notes;
   if (v.translatedCount === 0) {
     if (!r.priority) {
-      notes.push(html`<div class="rd-state"><span class="st" style="background:#F2F4F6;color:#3E4A56">Bản gốc tiếng Anh</span><span class="meta" style="flex:1 1 260px">MyLife chỉ dịch khi anh yêu cầu, để tiết kiệm hạn mức miễn phí.</span><span style="display:flex;gap:.5em;flex-wrap:wrap"><form method="post" action="/hoc-tap/bai/${it.id}/dich"><button class="btn" type="submit">Dịch bài này</button></form>${raw(speakButton())}</span></div>`);
+      notes.push(html`<div class="rd-state"><span class="st" style="background:#F2F4F6;color:#3E4A56">Bản gốc ${LANG_NAME[src]}</span><span class="meta" style="flex:1 1 260px">MyLife chỉ dịch khi anh yêu cầu, để tiết kiệm hạn mức miễn phí.</span><span style="display:flex;gap:.5em;flex-wrap:wrap"><form method="post" action="/hoc-tap/bai/${it.id}/dich"><button class="btn" type="submit">Dịch bài này</button></form>${raw(speakButton())}</span></div>`);
     } else if (r.status === 'waiting_quota') {
-      notes.push(html`<div class="rd-state warn"><span class="st wait">Chờ hạn mức</span><span class="meta" style="flex:1 1 300px">Đã hết hạn mức dịch miễn phí kỳ này. Bài đã xếp hàng, sẽ tự dịch khi có hạn mức mới; trong lúc chờ đọc bản gốc tiếng Anh.</span></div>`);
+      notes.push(html`<div class="rd-state warn"><span class="st wait">Chờ hạn mức</span><span class="meta" style="flex:1 1 300px">Đã hết hạn mức dịch miễn phí kỳ này. Bài đã xếp hàng, sẽ tự dịch khi có hạn mức mới; trong lúc chờ đọc bản gốc ${LANG_NAME[src]}.</span></div>`);
     } else {
       notes.push(liveProgress(it.id, pct, v));
     }
@@ -125,8 +125,9 @@ function stateBanner(it: ItemRow, v: FullTextView) {
 
 export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
   const heads = v.blocks.map((b, i) => ({ b, i })).filter(({ b, i }) => (b.k === 'h2' || b.k === 'h3') && !isRepeatedTitle(v, i, it.title_en));
-  // Bài tiếng Thái: tự dịch (tiêu đề tiếng Việt + nhãn "Dịch từ tiếng Thái"); bản gốc là tiếng Thái.
-  const src: 'en' | 'th' = isThai(it.title_en) || v.blocks.some((b) => isThai(b.t)) ? 'th' : 'en';
+  // Bài tiếng châu Á: tự dịch (tiêu đề tiếng Việt + nhãn "Dịch từ …"); nút ngôn ngữ ghi rõ bản gốc.
+  const fromItem = itemLang(it);
+  const src: SrcLang = isAuto(fromItem) ? fromItem : (() => { const b = detectLang(v.blocks.slice(0, 8).map((b) => b.t).join('\n')); return isAuto(b) ? b : fromItem === 'vi' ? 'vi' : 'en'; })();
   const title = it.title_vi || it.title_en;
   const langLink = (l: Lang, label: string) => html`<a class="${lang === l ? 'on' : ''}" href="/hoc-tap/bai/${it.id}?lang=${l}">${label}</a>`;
   const isPaper = v.row.kind === 'arxiv_html';
@@ -136,7 +137,7 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
   <article class="colmain" style="max-width:780px">
     <div class="meta"><a href="/hoc-tap">Học tập AI</a> › <a href="/hoc-tap/kenh/${CHANNELS[it.channel].slug}">${CHANNELS[it.channel].short}</a></div>
     <div class="rd-tools">
-      <div class="seg" role="group" aria-label="Ngôn ngữ">${langLink('vi', 'Tiếng Việt')}${langLink('en', src === 'th' ? 'Gốc (tiếng Thái)' : 'English')}${langLink('bi', 'Song ngữ')}</div>
+      <div class="seg" role="group" aria-label="Ngôn ngữ">${langLink('vi', 'Tiếng Việt')}${langLink('en', src === 'en' ? 'English' : `Gốc (${LANG_NAME[src]})`)}${langLink('bi', 'Song ngữ')}</div>
       <div class="seg" role="group" aria-label="Cỡ chữ"><button type="button" onclick="mlFs(-1)" aria-label="Chữ nhỏ hơn">A−</button><button type="button" onclick="mlFs(1)" aria-label="Chữ lớn hơn">A+</button></div>
       ${raw(speakButton())}
       <span style="margin-left:auto;display:flex;gap:.5em">
@@ -146,9 +147,9 @@ export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
     </div>
     <div class="kick">${CHANNELS[it.channel].name}${isPaper ? ' · Paper nghiên cứu' : ''} · Điểm ${it.score}</div>
     <h1 class="t1" style="margin:.35em 0 .25em;font-size:2em" lang="${it.title_vi ? 'vi' : src}">${title}</h1>
-    ${src === 'th' ? html`<div style="display:flex;gap:.5em;align-items:center;flex-wrap:wrap;margin-bottom:.6em"><span class="st" style="background:#FFF1E0;color:#8A4B0A">${it.title_vi ? 'Dịch từ tiếng Thái' : 'Tiếng Thái · chưa dịch'}</span>${it.title_vi ? html`<span class="meta" lang="th">${it.title_en}</span>` : ''}</div>` : ''}
+    ${isAuto(src) ? html`<div style="display:flex;gap:.5em;align-items:center;flex-wrap:wrap;margin-bottom:.6em"><span class="st" style="background:#FFF1E0;color:#8A4B0A">${it.title_vi ? `Dịch từ ${LANG_NAME[src]}` : `${capName(src)} · chưa dịch`}</span>${it.title_vi ? html`<span class="meta" lang="${src}">${it.title_en}</span>` : ''}</div>` : ''}
     <div class="meta" style="margin:.5em 0 1.2em">${it.authors ? `${it.authors} · ` : ''}${it.source_name} · đăng ${timeAgoVi(it.published_at)} · lấy về MyLife ${timeAgoVi(v.row.fetched_at)} · ${Math.max(1, Math.round(v.row.chars_en / 1100))} phút đọc</div>
-    ${stateBanner(it, v)}
+    ${stateBanner(it, v, src)}
     <div class="rd-body" id="rd">${v.blocks.length ? bodyHtml(v, lang, it.title_en, src) : html`<p class="meta">Nguồn không có nội dung để hiển thị.</p>`}</div>
     <div class="box" style="margin-top:1.6em;background:#F4F5F7;border:0;font-size:.9em;line-height:1.6">
       <span><b>Nguồn:</b> ${it.source_name}${it.authors ? ` · ${it.authors}` : ''} · <a href="${v.row.base_url ?? it.url}" target="_blank" rel="noopener" style="color:var(--ac);font-weight:600">Bản gốc ↗</a></span>
