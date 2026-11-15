@@ -9,8 +9,8 @@ import { READER_CSS, readerPage, type Lang } from './views/reader';
 import { SPEAK_CSS } from './views/speak';
 import { SEARCH_CSS, searchPage } from './views/search';
 import { parseScope, searchCaptures, searchItems } from './search';
-import { CAPTURE_CSS, capturePage, inboxPage, notebookPage } from './views/capture';
-import { olderCaptures, captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, processCapture, validateCapture, type NewCapture } from './capture';
+import { CAPTURE_CSS, captureEditPage, capturePage, inboxPage, notebookPage } from './views/capture';
+import { olderCaptures, captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, MAX_IMAGES, processCapture, setKept, updateCapture, validateCapture, type NewCapture } from './capture';
 import { ensureFullText, translateStep, viewOf } from './fulltext';
 import { QuotaExhausted } from './ai/providers';
 import { JOBS, runJob } from './jobs';
@@ -201,10 +201,11 @@ app.post('/hoc-tap/bai/:id/:action{giu|bo|da-doc}', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
   const id = Number(c.req.param('id'));
   const action = c.req.param('action');
-  if (action === 'giu') await c.env.DB.prepare('UPDATE items SET kept = 1 - kept WHERE id = ?').bind(id).run();
+  const form = await c.req.parseBody();
+  if (action === 'giu') await setKept(c.env, 'item', id, form.want === undefined ? undefined : form.want === '1');
   else if (action === 'da-doc') await c.env.DB.prepare('UPDATE items SET read_at = CASE WHEN read_at IS NULL THEN ? ELSE NULL END WHERE id = ?').bind(new Date().toISOString(), id).run();
   else await c.env.DB.prepare('UPDATE items SET dismissed = 1 WHERE id = ?').bind(id).run();
-  const back = String((await c.req.parseBody()).back ?? '/hoc-tap');
+  const back = String(form.back ?? '/hoc-tap');
   return c.redirect(back.startsWith('/') ? back : '/hoc-tap', 303);
 });
 
@@ -272,6 +273,31 @@ app.get('/hoc-tap/hop-nhat/:id{[0-9]+}', async (c) => {
   return c.html(capturePage(cap, await captureImages(c.env, cap.id), item, await olderCaptures(c.env, cap)));
 });
 
+// Sửa mục nhặt (tiêu đề, link, nội dung, kênh, ảnh).
+app.get('/hoc-tap/hop-nhat/:id{[0-9]+}/sua', async (c) => {
+  const cap = await getCapture(c.env, Number(c.req.param('id')));
+  if (!cap) return c.notFound();
+  return c.html(captureEditPage(cap, await captureImages(c.env, cap.id)));
+});
+
+app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/sua', async (c) => {
+  if (!sameOrigin(c)) return c.json({ ok: false, error: 'Yêu cầu không hợp lệ' }, 400);
+  const cap = await getCapture(c.env, Number(c.req.param('id')));
+  if (!cap) return c.json({ ok: false, error: 'Không tìm thấy mục nhặt' }, 404);
+  const fd = await c.req.formData();
+  const form = await readCaptureForm(fd, 'web');
+  const removeImages = fd.getAll('del').map((x) => Number(x)).filter((x) => x > 0);
+  const remaining = (await captureImages(c.env, cap.id)).filter((x) => !removeImages.includes(x.id)).length;
+  if (remaining + form.images.length > MAX_IMAGES) return c.json({ ok: false, error: `Mỗi mục tối đa ${MAX_IMAGES} ảnh (đang giữ ${remaining}, thêm ${form.images.length}).` }, 400);
+  const err = !form.url && !form.note && !form.images.length && !remaining
+    ? 'Mục nhặt phải còn ít nhất một thứ: ảnh, link hoặc nội dung.'
+    : form.url || form.images.length || form.note ? (form.url || form.images.length ? validateCapture(form) : null) : null;
+  if (err) return c.json({ ok: false, error: err }, 400);
+  const relink = await updateCapture(c.env, cap, { title: form.title, url: form.url, note: form.note, channel: form.channel, removeImages, images: form.images });
+  if (relink) c.executionCtx.waitUntil(processCapture(c.env, cap.id).catch(() => ''));
+  return c.json({ ok: true, id: cap.id, url: `/hoc-tap/hop-nhat/${cap.id}` });
+});
+
 app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xoa|xu-ly-lai}', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
   const id = Number(c.req.param('id'));
@@ -279,7 +305,7 @@ app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xoa|xu-ly-lai}', async (c
   const body = await c.req.parseBody();
   const back = String(body.back ?? `/hoc-tap/hop-nhat/${id}`);
   const go = (u: string) => c.redirect(u.startsWith('/') ? u : '/hoc-tap/hop-nhat', 303);
-  if (action === 'so-tay') await c.env.DB.prepare('UPDATE captures SET kept = 1 - kept WHERE id = ?').bind(id).run();
+  if (action === 'so-tay') await setKept(c.env, 'capture', id, body.want === undefined ? undefined : body.want === '1');
   if (action === 'ghi-chu') {
     await c.env.DB.prepare('UPDATE captures SET note = ? WHERE id = ?').bind(String(body.note ?? '').trim().slice(0, 30000) || null, id).run();
     return go(`/hoc-tap/hop-nhat/${id}`);
@@ -309,10 +335,11 @@ app.get('/hoc-tap/anh/:id{[0-9]+}', async (c) => {
 });
 
 app.get('/hoc-tap/so-tay', async (c) => {
-  const captures = await listCaptures(c.env, 'c.kept = 1', 200);
+  // Xếp theo lúc bấm "Lưu Sổ tay", mới lưu lên đầu.
+  const captures = await listCaptures(c.env, 'c.kept = 1', 300, 0, 'COALESCE(c.kept_at, c.created_at) DESC');
   const { results: items } = await c.env.DB.prepare(
     `SELECT i.*, s.name AS source_name FROM items i JOIN sources s ON s.id = i.source_id
-     WHERE i.kept = 1 AND i.source_id <> 'manual' ORDER BY i.fetched_at DESC LIMIT 200`
+     WHERE i.kept = 1 AND i.source_id <> 'manual' ORDER BY COALESCE(i.kept_at, i.fetched_at) DESC LIMIT 300`
   ).all<ItemRow>();
   return c.html(notebookPage({ captures, items }));
 });

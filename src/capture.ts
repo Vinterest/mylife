@@ -28,6 +28,7 @@ export interface CaptureRow {
   status: 'new' | 'done' | 'failed';
   error: string | null;
   kept: number;
+  kept_at?: string | null; // lúc bấm "Lưu Sổ tay"
   archived: number;
   via: string;
   // ghép thêm khi liệt kê
@@ -111,13 +112,13 @@ export async function captureImages(env: Env, id: number): Promise<CaptureImage[
 }
 
 /** Danh sách cho Hộp nhặt / Sổ tay (không đọc cột ảnh để nhẹ). */
-export async function listCaptures(env: Env, where: string, limit = 60, offset = 0): Promise<CaptureRow[]> {
+export async function listCaptures(env: Env, where: string, limit = 60, offset = 0, order = 'c.created_at DESC'): Promise<CaptureRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT c.*,
        (SELECT GROUP_CONCAT(id) FROM capture_images WHERE capture_id = c.id) AS img_ids,
        (SELECT SUBSTR(ocr_text, 1, 400) FROM capture_images WHERE capture_id = c.id AND ocr_text IS NOT NULL ORDER BY id LIMIT 1) AS ocr_preview,
        (SELECT COUNT(*) FROM capture_images WHERE capture_id = c.id AND ocr_status = 'pending') AS ocr_pending
-     FROM captures c WHERE ${where} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`
+     FROM captures c WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`
   ).bind(limit, offset).all<CaptureRow>();
   return results;
 }
@@ -202,7 +203,10 @@ export async function syncItem(env: Env, captureId: number): Promise<void> {
     `UPDATE items SET
        title_en = COALESCE((SELECT title FROM captures WHERE id = ?1), title_en),
        abstract_en = COALESCE((SELECT note FROM captures WHERE id = ?1), abstract_en),
-       image_url = COALESCE((SELECT '/hoc-tap/anh/' || MIN(id) FROM capture_images WHERE capture_id = ?1 HAVING COUNT(*) > 0), image_url)
+       image_url = COALESCE((SELECT '/hoc-tap/anh/' || MIN(id) FROM capture_images WHERE capture_id = ?1 HAVING COUNT(*) > 0), image_url),
+       channel = COALESCE((SELECT channel FROM captures WHERE id = ?1), channel),
+       kept = COALESCE((SELECT kept FROM captures WHERE id = ?1), kept),
+       kept_at = (SELECT kept_at FROM captures WHERE id = ?1)
      WHERE source_id = 'manual' AND id = (SELECT item_id FROM captures WHERE id = ?1)`
   ).bind(captureId).run();
 }
@@ -241,4 +245,80 @@ export async function processPendingCaptures(env: Env): Promise<string> {
   await env.DB.prepare(`UPDATE capture_images SET ocr_status = 'skipped', ocr_text = CASE WHEN ocr_status = 'failed' THEN NULL ELSE ocr_text END WHERE ocr_status IN ('pending','failed')`).run();
   const r = await env.DB.prepare(`SELECT id FROM captures WHERE status = 'new' ORDER BY created_at LIMIT 1`).first<{ id: number }>();
   return r ? processCapture(env, r.id) : '';
+}
+
+/**
+ * Lưu / bỏ khỏi Sổ tay. Bài tạo từ Hộp nhặt (nguồn "manual") và mục nhặt của nó luôn đổi CÙNG NHAU,
+ * dù anh bấm ở danh sách kênh, trang đọc bài hay Hộp nhặt. `want` = trạng thái muốn đặt (form gửi kèm,
+ * để trang mở cũ trên máy khác không vô tình đảo ngược); không có thì đảo trạng thái hiện tại.
+ */
+export async function setKept(env: Env, kind: 'item' | 'capture', id: number, want?: boolean): Promise<void> {
+  const now = new Date().toISOString();
+  if (kind === 'item') {
+    const it = await env.DB.prepare('SELECT source_id, kept FROM items WHERE id = ?').bind(id).first<{ source_id: string; kept: number }>();
+    if (!it) return;
+    const on = want ?? !it.kept;
+    const at = on ? now : null;
+    const stmts = [env.DB.prepare('UPDATE items SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE id = ?').bind(on ? 1 : 0, on ? 1 : 0, at, id)];
+    if (it.source_id === 'manual') stmts.push(env.DB.prepare('UPDATE captures SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE item_id = ?').bind(on ? 1 : 0, on ? 1 : 0, at, id));
+    await env.DB.batch(stmts);
+    return;
+  }
+  const c = await env.DB.prepare('SELECT kept, item_id FROM captures WHERE id = ?').bind(id).first<{ kept: number; item_id: number | null }>();
+  if (!c) return;
+  const on = want ?? !c.kept;
+  const at = on ? now : null;
+  const stmts = [env.DB.prepare('UPDATE captures SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE id = ?').bind(on ? 1 : 0, on ? 1 : 0, at, id)];
+  if (c.item_id) stmts.push(env.DB.prepare(`UPDATE items SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE id = ? AND source_id = 'manual'`).bind(on ? 1 : 0, on ? 1 : 0, at, c.item_id));
+  await env.DB.batch(stmts);
+}
+
+export interface CaptureEdit {
+  title?: string;
+  url?: string;
+  note?: string;
+  channel?: string;
+  removeImages: number[];
+  images: { mime: string; data: ArrayBuffer }[];
+}
+
+/**
+ * Sửa mục nhặt: tiêu đề, link, nội dung, kênh, xoá bớt / thêm ảnh.
+ * Đổi link hoặc xoá trống tiêu đề (khi có link) → MyLife lấy lại tiêu đề/ảnh/toàn văn của link. Trả về true nếu cần xử lý lại.
+ */
+export async function updateCapture(env: Env, cap: CaptureRow, e: CaptureEdit): Promise<boolean> {
+  const url = e.url?.trim() || null;
+  const note = e.note?.trim().slice(0, 30000) || null;
+  const userTitle = e.title?.trim().slice(0, 300) || null;
+  const urlChanged = url !== (cap.url ?? null);
+  const relink = !!url && (urlChanged || !userTitle);
+  const keepIds = (await captureImages(env, cap.id)).map((x) => x.id).filter((x) => !e.removeImages.includes(x));
+  const nImg = keepIds.length + e.images.length;
+  const title = userTitle ?? (url ? null : defaultTitle(note, cap.created_at, nImg));
+  const stmts = [
+    env.DB.prepare(
+      `UPDATE captures SET title = ?, url = ?, note = ?, channel = ?, status = ?, error = NULL,
+         item_id = CASE WHEN ? THEN NULL ELSE item_id END,
+         description = CASE WHEN ? THEN NULL ELSE description END,
+         image_url = CASE WHEN ? THEN NULL ELSE image_url END
+       WHERE id = ?`
+    ).bind(title, url, note, normChannel(e.channel ?? cap.channel), relink ? 'new' : 'done', relink ? 1 : 0, urlChanged ? 1 : 0, urlChanged ? 1 : 0, cap.id),
+    ...e.removeImages.map((imgId) => env.DB.prepare('DELETE FROM capture_images WHERE id = ? AND capture_id = ?').bind(imgId, cap.id)),
+    ...e.images.map((im) =>
+      env.DB.prepare(`INSERT INTO capture_images (capture_id, mime, bytes, data, ocr_status) VALUES (?, ?, ?, ?, 'skipped')`).bind(cap.id, im.mime.toLowerCase(), im.data.byteLength, im.data)
+    ),
+  ];
+  // Bỏ link cũ: bài "manual" của link cũ không còn mục nhặt nào dùng → ẩn khỏi danh sách kênh.
+  if (cap.item_id && urlChanged) {
+    stmts.push(env.DB.prepare(
+      `UPDATE items SET dismissed = 1, kept = 0, kept_at = NULL WHERE id = ?1 AND source_id = 'manual' AND NOT EXISTS (SELECT 1 FROM captures WHERE item_id = ?1 AND id <> ?2)`
+    ).bind(cap.item_id, cap.id));
+  }
+  await env.DB.batch(stmts);
+  if (!relink && cap.item_id) {
+    // Ảnh đầu tiên có thể đã đổi: đặt lại ảnh đại diện trước khi đồng bộ.
+    await env.DB.prepare(`UPDATE items SET image_url = NULL WHERE id = ? AND source_id = 'manual' AND image_url LIKE '/hoc-tap/anh/%'`).bind(cap.item_id).run();
+    await syncItem(env, cap.id);
+  }
+  return relink;
 }

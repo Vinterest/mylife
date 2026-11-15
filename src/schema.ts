@@ -52,6 +52,21 @@ export async function ensureSchema(env: Env): Promise<void> {
     ]);
   }
   if (!has.has('note')) await env.DB.prepare('ALTER TABLE items ADD COLUMN note TEXT').run(); // ghi chú Sổ tay
+  // Sổ tay xếp theo lúc bấm "Lưu Sổ tay". Đồng thời cứu các bài nhặt bị "mất": trước đây bấm Lưu Sổ tay ở danh sách
+  // kênh chỉ đánh dấu bài (items) mà không đánh dấu mục nhặt — trang Sổ tay lại chỉ đọc mục nhặt.
+  const kc = await env.DB.prepare("SELECT 1 AS x FROM pragma_table_info('items') WHERE name = 'kept_at'").first();
+  if (!kc) {
+    await env.DB.batch([
+      env.DB.prepare('ALTER TABLE items ADD COLUMN kept_at TEXT'),
+      env.DB.prepare('ALTER TABLE captures ADD COLUMN kept_at TEXT'),
+      env.DB.prepare('UPDATE items SET kept_at = fetched_at WHERE kept = 1'),
+      env.DB.prepare('UPDATE captures SET kept_at = created_at WHERE kept = 1'),
+      env.DB.prepare(`UPDATE captures SET kept = 1, kept_at = (SELECT fetched_at FROM items WHERE id = captures.item_id)
+        WHERE kept = 0 AND item_id IN (SELECT id FROM items WHERE source_id = 'manual' AND kept = 1)`),
+      env.DB.prepare(`UPDATE items SET kept = 1, kept_at = (SELECT MAX(kept_at) FROM captures WHERE item_id = items.id)
+        WHERE source_id = 'manual' AND kept = 0 AND id IN (SELECT item_id FROM captures WHERE kept = 1 AND item_id IS NOT NULL)`),
+    ]);
+  }
   // Nguồn bổ sung (khi DB đã tạo từ trước): INSERT OR IGNORE nên chạy lại cũng an toàn.
   const { results: have } = await env.DB.prepare("SELECT id FROM sources WHERE id IN ('sm-deepseek','sm-figure','rss-fn-sg')").all<{ id: string }>();
   const ids = new Set(have.map((r) => r.id));

@@ -73,9 +73,9 @@ function capRow(c: CaptureRow, back: string) {
     <a class="t2" href="/hoc-tap/hop-nhat/${c.id}">${c.title || c.url || 'Ảnh nhặt'}</a>
     ${text && text.trim() !== (c.title ?? '').trim() ? html`<p class="ocr">${text}</p>` : ''}
     <div class="acts">
-      <span class="meta">${timeAgoVi(c.created_at)} · ${c.via === 'shortcut' ? 'từ Phím tắt iPhone' : 'từ web'}${nImg ? ` · ${nImg} ảnh` : ''}${c.url ? ' · có link' : ''}</span>
+      <span class="meta">nhặt ${timeAgoVi(c.created_at)}${c.kept && c.kept_at ? ` · lưu Sổ tay ${timeAgoVi(c.kept_at)}` : ''} · ${c.via === 'shortcut' ? 'từ Phím tắt iPhone' : 'từ web'}${nImg ? ` · ${nImg} ảnh` : ''}${c.url ? ' · có link' : ''}</span>
       <a href="/hoc-tap/hop-nhat/${c.id}">Mở</a>
-      <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><button class="l" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu Sổ tay'}</button></form>
+      <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><input type="hidden" name="want" value="${c.kept ? 0 : 1}"><button class="l" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu Sổ tay'}</button></form>
     </div>
   </div>
 </article>`;
@@ -147,7 +147,7 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
   <article class="colmain" style="max-width:820px">
     <div class="meta"><a href="/hoc-tap/hop-nhat">Hộp nhặt</a> › mục #${c.id}</div>
     <div class="kick" style="margin-top:.6em">${chName(c.channel)} · nhặt ${timeAgoVi(c.created_at)} ${c.via === 'shortcut' ? '· từ Phím tắt iPhone' : '· từ web'}</div>
-    <h1 class="t1" style="margin:.35em 0 .6em;font-size:2em">${c.title || c.url || 'Ảnh nhặt'}</h1>
+    <div style="display:flex;gap:.8em;align-items:flex-start"><h1 class="t1" style="margin:.35em 0 .6em;font-size:2em;flex:1">${c.title || c.url || 'Ảnh nhặt'}</h1><a class="btn2" style="margin-top:.6em;white-space:nowrap" href="/hoc-tap/hop-nhat/${c.id}/sua">✎ Sửa</a></div>
     ${pending ? html`<div class="rd-state"><span class="st wait">Đang xử lý…</span><span class="meta">MyLife đang lấy tiêu đề và nội dung của link. Trang tự tải lại sau 8 giây.</span></div><script>setTimeout(function(){location.reload()},8000)</script>` : ''}
     ${c.status === 'failed' ? html`<div class="rd-state warn"><span class="st err">Lỗi</span><span class="meta">${c.error ?? ''}</span><form method="post" action="/hoc-tap/hop-nhat/${c.id}/xu-ly-lai"><button class="btn2" type="submit">Xử lý lại</button></form></div>` : ''}
     ${imgs.length ? html`<div class="imgs">${imgs.map((im, k) => html`<figure>
@@ -165,7 +165,8 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
     ${c.note ? html`<div style="margin-top:1.2em"><div style="display:flex;justify-content:space-between;align-items:center;gap:.5em"><span class="kick">Nội dung</span><button class="l" type="button" style="color:var(--ac);font-weight:600" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.parentNode.nextElementSibling.textContent).then(()=>{this.textContent='Đã chép ✓'})">Chép</button></div><div class="ocrbox capbody">${c.note}</div></div><script>(function(){var v=1;try{v=parseFloat(localStorage.getItem('ml-fs'))||1}catch(e){}document.querySelectorAll('.capbody').forEach(function(e){e.style.setProperty('--fs',v)})})();</script>` : ''}
     <div class="acts" style="margin-top:1.4em">
       <a href="/hoc-tap/hop-nhat">‹ Về Hộp nhặt</a>
-      <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><button class="${c.kept ? 'btn2' : 'btn'}" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu vào Sổ tay'}</button></form>
+      <a class="btn2" href="/hoc-tap/hop-nhat/${c.id}/sua">✎ Sửa</a>
+      <form class="inline" method="post" action="/hoc-tap/hop-nhat/${c.id}/so-tay"><input type="hidden" name="back" value="${back}"><input type="hidden" name="want" value="${c.kept ? 0 : 1}"><button class="${c.kept ? 'btn2' : 'btn'}" type="submit">${c.kept ? 'Bỏ khỏi Sổ tay' : 'Lưu vào Sổ tay'}</button></form>
       <details style="display:inline-block"><summary class="meta" style="cursor:pointer">Xóa…</summary><form method="post" action="/hoc-tap/hop-nhat/${c.id}/xoa" style="margin-top:.4em"><button class="btn2" style="color:#9A2A14;border-color:#9A2A14" type="submit">Xóa hẳn mục này và ảnh</button></form></details>
     </div>
   </article>
@@ -185,16 +186,16 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
 export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[] }) {
   type Entry = { at: string; html: unknown };
   const entries: Entry[] = [
-    ...p.captures.map((c) => ({ at: c.created_at, html: capRow(c, '/hoc-tap/so-tay') })),
+    ...p.captures.map((c) => ({ at: c.kept_at || c.created_at, html: capRow(c, '/hoc-tap/so-tay') })),
     ...p.items.map((it) => ({
-      at: it.fetched_at,
+      at: it.kept_at || it.fetched_at,
       html: html`<article class="cc">
         <a class="th" href="/hoc-tap/bai/${it.id}" tabindex="-1" aria-hidden="true"><img src="${it.image_url || `/thumb/${it.source_id}.svg`}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/thumb/${it.source_id}.svg'"></a>
         <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
-          <span class="kick">${chName(it.channel)} · bài đã giữ</span>
+          <span class="kick">${chName(it.channel)} · bài đã lưu</span>
           <a class="t2" href="/hoc-tap/bai/${it.id}">${it.title_vi || it.title_en}</a>
           ${it.note ? html`<div class="why"><b>Ghi chú:</b> ${it.note}</div>` : ''}
-          <span class="meta">${it.source_name} · ${timeAgoVi(it.published_at)}</span>
+          <span class="meta">${it.source_name} · đăng ${timeAgoVi(it.published_at)}${it.kept_at ? ` · lưu Sổ tay ${timeAgoVi(it.kept_at)}` : ''}</span>
         </div>
       </article>`,
     })),
@@ -202,9 +203,37 @@ export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[] }) {
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>Sổ tay · ${entries.length} mục</h2><span class="meta">mục nhặt và bài đã bấm “Lưu Sổ tay” · lưu vĩnh viễn</span></div>
+    <div class="sh"><h2>Sổ tay · ${entries.length} mục</h2><span class="meta">mới lưu lên đầu · lưu vĩnh viễn</span></div>
     ${entries.length ? entries.map((e) => e.html) : html`<div class="empty">Sổ tay trống. Bấm “Lưu Sổ tay” ở bài báo hoặc mục nhặt để lưu vĩnh viễn.</div>`}
   </div>
 </section>`;
   return page({ title: 'Sổ tay', tab: 'g2', sub: g2Sub('notes'), body });
+}
+
+/** Trang sửa mục nhặt: cùng bố cục với khung "Nhặt bài mới", điền sẵn nội dung cũ. */
+export function captureEditPage(c: CaptureRow, imgs: CaptureImage[]) {
+  const inp = 'width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:.6em .7em;border:1px solid #C9D1DA;border-radius:6px;background:#fff;color:inherit';
+  const body = html`
+<section class="cols">
+  <div class="colmain" style="max-width:760px">
+    <div class="meta"><a href="/hoc-tap/hop-nhat">Hộp nhặt</a> › <a href="/hoc-tap/hop-nhat/${c.id}">mục #${c.id}</a> › sửa</div>
+    <div class="sh" style="margin-top:.6em"><h2>Sửa mục nhặt</h2><span class="meta">nhặt ${timeAgoVi(c.created_at)}</span></div>
+    <form id="capf" class="box cap-form" method="post" action="/hoc-tap/hop-nhat/${c.id}/sua" enctype="multipart/form-data">
+      <div><label>1 · Ảnh chụp màn hình <span class="meta">(tối đa 6 ảnh mỗi mục)</span></label>
+        ${imgs.length ? html`<div class="prevs" style="margin-bottom:.5em">${imgs.map((im, k) => html`<figure title="Ảnh ${k + 1}"><img src="/hoc-tap/anh/${im.id}" alt="Ảnh ${k + 1}"><figcaption><label style="font-weight:500;display:flex;gap:.3em;align-items:center;font-size:10px"><input type="checkbox" name="del" value="${im.id}" onchange="this.closest('figure').style.opacity=this.checked?.35:1">Xoá</label></figcaption></figure>`)}</div><span class="meta">Đánh dấu “Xoá” ở ảnh muốn bỏ. Ảnh thêm mới ở dưới.</span>` : ''}
+        <input id="capimg" type="file" name="image" accept="image/*" multiple hidden>
+        <div id="drop" class="drop" role="button" tabindex="0" style="margin-top:.5em"><b>Thêm ảnh</b><span class="meta dropk"> · máy tính: kéo thả hoặc Ctrl+V</span></div>
+        <div id="prevs" class="prevs" style="margin-top:.5em"></div></div>
+      <div><label for="capurl">2 · Link đường dẫn</label>
+        <div class="cap-row"><input id="capurl" type="url" name="url" inputmode="url" placeholder="https://…" autocomplete="off" value="${c.url ?? ''}"><button id="pastebtn" class="btn2" type="button">Dán</button></div>
+        <span class="meta">Đổi link thì MyLife lấy lại tiêu đề, ảnh và toàn văn của link mới.</span></div>
+      <div><label for="capnote">3 · Nội dung</label><textarea id="capnote" name="note" rows="8" placeholder="Dán nội dung bài viết vào đây…">${c.note ?? ''}</textarea></div>
+      <div><label for="captitle">4 · Tiêu đề <span class="meta">(để trống thì MyLife tự đặt)</span></label><input id="captitle" type="text" name="title" maxlength="300" autocomplete="off" value="${c.title ?? ''}" style="${inp}"></div>
+      <div><label>Kênh</label><div class="chans">${CHANNEL_ORDER.map((ch) => html`<label><input type="radio" name="channel" value="${ch}" ${c.channel === ch ? 'checked' : ''}>${CHANNELS[ch].short}</label>`)}</div></div>
+      <div style="display:flex;gap:.8em;align-items:center;flex-wrap:wrap"><button id="capbtn" class="btn" type="submit">Lưu thay đổi</button><a href="/hoc-tap/hop-nhat/${c.id}">Huỷ</a><span id="capmsg" class="cap-msg" role="status"></span></div>
+    </form>
+  </div>
+</section>
+<script>${raw(FORM_JS)}</script>`;
+  return page({ title: 'Sửa mục nhặt', tab: 'g2', sub: g2Sub('inbox'), body });
 }

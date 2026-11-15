@@ -62,6 +62,7 @@ export interface ItemRow {
   read_at: string | null;
   note?: string | null;
   kept: number;
+  kept_at?: string | null; // lúc bấm "Lưu Sổ tay"
   dismissed: number;
   source_name?: string;
   source_weight?: number;
