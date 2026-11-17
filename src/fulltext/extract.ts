@@ -13,6 +13,12 @@ export function isJunkImage(src: string, alt = '', cls = ''): boolean {
   // Ảnh giao diện của trang: logo, linh vật (vd. "Saucy" của Techsauce), biểu tượng, ảnh đại diện tác giả, ảnh giữ chỗ.
   if (/^(logo|saucy|mascot|sprite|avatar|favicon|placeholder|default|icon|badge|loading|spinner)([\w@.-]*)\.(png|svg|gif|webp|jpe?g)$/.test(file)) return true;
   if (/(^|[_-])(logo|icon|avatar|sprite|mascot)([_.@-]|\d)/.test(file) && !/\d{4}/.test(file)) return true;
+  // Ảnh đại diện tác giả (Hugging Face, headshot…), ảnh giữ chỗ khi video chưa tải, banner quảng cáo theo tên.
+  if (/\/avatars?\/|cdn-avatars\.|\/fallback\/|\/authors?\//i.test(src)) return true;
+  if (/(^|[_-])headshot|^(profile|author|gravatar)([_.-]|\d)|banner[-_]?ad|[-_]ad[-_.]|advert|video_poster/.test(file)) return true;
+  // Ảnh thu nhỏ WordPress cỡ ≤ 200px (vd. "-127x150.jpg"): thường là ảnh tác giả / bài liên quan.
+  const wp = /-(\d{2,4})x(\d{2,4})\.(jpe?g|png|webp|gif)$/.exec(file);
+  if (wp && Number(wp[1]) <= 200 && Number(wp[2]) <= 200) return true;
   // Banner quảng cáo theo kích thước chuẩn.
   if (/(^|[^\d])(300x250|728x90|160x600|320x50|300x600|970x250|336x280|320x100|468x60|970x90)([^\d]|$)/.test(file)) return true;
   return false;
