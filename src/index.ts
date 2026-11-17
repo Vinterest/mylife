@@ -145,7 +145,8 @@ app.get('/hoc-tap', async (c) => {
 app.get('/hoc-tap/kenh/:slug', async (c) => {
   const ch = channelBySlug(c.req.param('slug'));
   if (!ch) return c.notFound();
-  const sort = sortOf(c.req.query('xep'));
+  // Trang từng kênh: mặc định xếp Điểm cao; ?xep=moi để xem mới nhất.
+  const sort: SortMode = c.req.query('xep') === 'moi' ? 'moi' : 'diem';
   const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
   const rows = await latestByChannel(c.env, ch, 21, (pageNo - 1) * 20, sort);
   return c.html(channelPage({ channel: ch, items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20, sort }));

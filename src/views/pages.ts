@@ -23,10 +23,12 @@ const isNew = (it: ItemRow) => Date.now() - new Date(it.fetched_at).getTime() < 
 
 const newBadge = (it: ItemRow) => (isNew(it) ? html`<img class="newb" src="/new.svg" alt="Mới" title="Vừa về MyLife trong 3 giờ qua" width="64" height="26">` : '');
 
-/** Nút chuyển cách xếp: mới nhất trước / điểm cao trước. */
-function sortSwitch(base: string, sort: SortMode) {
+/** Nút chuyển cách xếp. `def` = cách xếp mặc định của trang (không cần tham số trên link); nút mặc định đứng trước. */
+function sortSwitch(base: string, sort: SortMode, def: SortMode = 'moi') {
   const sep = base.includes('?') ? '&' : '?';
-  return html`<span class="seg sm" role="group" aria-label="Cách xếp"><a class="${sort === 'moi' ? 'on' : ''}" href="${base}">Mới nhất</a><a class="${sort === 'diem' ? 'on' : ''}" href="${base}${sep}xep=diem">Điểm cao</a></span>`;
+  const link = (m: SortMode) => (m === def ? base : `${base}${sep}xep=${m}`);
+  const btn = (m: SortMode) => html`<a class="${sort === m ? 'on' : ''}" href="${link(m)}">${m === 'diem' ? 'Điểm cao' : 'Mới nhất'}</a>`;
+  return html`<span class="seg sm" role="group" aria-label="Cách xếp">${def === 'diem' ? [btn('diem'), btn('moi')] : [btn('moi'), btn('diem')]}</span>`;
 }
 
 function snippet(it: ItemRow) {
@@ -116,12 +118,12 @@ export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Recor
 
 export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[]; pageNo: number; hasMore: boolean; sort: SortMode }) {
   const ch = CHANNELS[p.channel];
-  const xq = p.sort === 'diem' ? '&xep=diem' : '';
+  const xq = p.sort === 'moi' ? '&xep=moi' : '';
   const back = `/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo}${xq}`;
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>${ch.name}</h2><span class="meta">trang ${p.pageNo}</span>${sortSwitch(`/hoc-tap/kenh/${ch.slug}`, p.sort)}</div>
+    <div class="sh one"><h2>${ch.name}</h2>${sortSwitch(`/hoc-tap/kenh/${ch.slug}`, p.sort, 'diem')}</div>
     ${p.items.length ? p.items.map((it) => readRow(it, back)) : html`<div class="empty">Chưa có bài trong kênh này.</div>`}
     <div class="pager">
       ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo - 1}${xq}">‹ Mới hơn</a>` : html`<span></span>`}
