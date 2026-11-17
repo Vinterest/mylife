@@ -9,7 +9,47 @@ export function isJunkImage(src: string, alt = '', cls = ''): boolean {
   if (/\b(emoji|wp-smiley|twemoji|smiley)\b/i.test(cls)) return true;
   if (/s\.w\.org\/images\/core\/emoji|twemoji|\/emoji\/|\/smilies\/|\/emoticons?\/|pixel\.(gif|png)|1x1\.(gif|png)|gravatar\.com\/avatar/i.test(src)) return true;
   if (alt && alt.length <= 8 && EMOJI_ALT.test(alt) && /\p{Extended_Pictographic}/u.test(alt)) return true;
+  const file = (src.split(/[?#]/)[0].split('/').pop() ?? '').toLowerCase();
+  // Ảnh giao diện của trang: logo, linh vật (vd. "Saucy" của Techsauce), biểu tượng, ảnh đại diện tác giả, ảnh giữ chỗ.
+  if (/^(logo|saucy|mascot|sprite|avatar|favicon|placeholder|default|icon|badge|loading|spinner)([\w@.-]*)\.(png|svg|gif|webp|jpe?g)$/.test(file)) return true;
+  if (/(^|[_-])(logo|icon|avatar|sprite|mascot)([_.@-]|\d)/.test(file) && !/\d{4}/.test(file)) return true;
+  // Banner quảng cáo theo kích thước chuẩn.
+  if (/(^|[^\d])(300x250|728x90|160x600|320x50|300x600|970x250|336x280|320x100|468x60|970x90)([^\d]|$)/.test(file)) return true;
   return false;
+}
+
+/*
+ * Điểm kết thúc bài: nhiều trang (Techsauce…) đặt ngay sau bài khối "bài liên quan", hộp đăng ký, lời mời đọc thêm
+ * cùng trong vùng <article>. Cắt từ khối đánh dấu đầu tiên, hoặc từ khi lặp lại dòng "ngày | tác giả" (dấu hiệu danh sách bài khác).
+ */
+const END_MARK = /^(ลงทะเบียนเข้าสู่ระบบ|ลงทะเบียนเพื่อ|สมัครสมาชิก|บทความที่เกี่ยวข้อง|บทความแนะนำ|อ่านเพิ่มเติม|ข่าวที่เกี่ยวข้อง|related (articles?|posts?|stories|news|reading)|read (more|next)\b|you (may|might) also like|more from |recommended (for you|articles|stories)|sign up (for|to)|subscribe to (our|the)|newsletter|artikel terkait|baca juga|berita terkait|baca selengkapnya|관련\s*기사|관련\s*뉴스|関連記事|関連ニュース|相关(文章|阅读|新闻)|推荐阅读|bài viết liên quan|tin liên quan|đọc thêm|xem thêm)/i;
+const BYLINE = /(\|\s*(by|bởi|โดย|oleh)\b)|(^\S+ \d{1,2}, 20\d\d\s*\|)/i;
+
+/** Số khối thuộc bài chính (phần sau đó là khối liên quan / đăng ký). */
+export function articleEnd(blocks: { k: string; t: string }[]): number {
+  let bylines = 0;
+  for (let k = 0; k < blocks.length; k++) {
+    const b = blocks[k];
+    if (b.k === 'img') continue;
+    if (k >= 3 && b.t.length <= 140 && END_MARK.test(b.t)) return k;
+    if (b.t.length <= 120 && BYLINE.test(b.t)) {
+      bylines++;
+      // Dòng tác giả thứ hai ở nửa sau bài → danh sách bài khác bắt đầu từ thẻ (ảnh + tiêu đề) ngay trước nó.
+      if (bylines >= 2 && k > blocks.length * 0.4) {
+        for (let s = k - 1; s >= Math.max(0, k - 3); s--) if (blocks[s].k === 'img') return s;
+        return k;
+      }
+    }
+  }
+  return blocks.length;
+}
+
+/** Vị trí các khối được hiển thị: bỏ phần đuôi không thuộc bài và ảnh rác (dùng cả cho bài đã lưu từ trước). */
+export function visibleIndexes(blocks: { k: string; t: string; src?: string }[]): number[] {
+  const end = articleEnd(blocks);
+  const out: number[] = [];
+  for (let k = 0; k < end; k++) if (!(blocks[k].k === 'img' && isJunkImage(blocks[k].src ?? '', blocks[k].t))) out.push(k);
+  return out;
 }
 
 export type BlockKind = 'h2' | 'h3' | 'p' | 'li' | 'quote' | 'pre' | 'img' | 'cap';
@@ -113,6 +153,9 @@ export async function extractBlocks(res: Response, baseUrl: string): Promise<Blo
   // Có vùng bài viết rõ ràng thì chỉ giữ vùng đó.
   const artChars = blocks.filter((b) => b.art && b.k !== 'img').reduce((n, b) => n + b.t.length, 0);
   if (artChars > 600) blocks = blocks.filter((b) => b.art);
+
+  // Cắt phần đuôi không thuộc bài (bài liên quan, hộp đăng ký…).
+  blocks = blocks.slice(0, articleEnd(blocks));
 
   // Bỏ đoạn trùng liên tiếp, giới hạn độ dài, giới hạn số hình
   const res2: Block[] = [];

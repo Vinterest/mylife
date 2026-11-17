@@ -1,7 +1,8 @@
 import type { Env, ItemRow } from '../types';
 import { QuotaExhausted, RateLimited } from '../ai/providers';
 import { vnDay } from '../util';
-import type { Block } from './extract';
+import { articleEnd, type Block } from './extract';
+import { detectLang, isAuto, itemLang } from '../lang';
 import { fetchFullText } from './fetch';
 import { AI_ENGINES, makeChunks, translateChunk, type Engine } from './translate';
 
@@ -28,6 +29,8 @@ export interface FullTextView {
   vi: (string | null)[];
   engines: (Engine | null)[];
   translatedCount: number;
+  /** Số khối thuộc bài chính; từ đây trở đi là phần đuôi không dịch. */
+  end: number;
   translatableCount: number;
   usedMt: boolean;
 }
@@ -36,9 +39,20 @@ export function viewOf(row: FullTextRow): FullTextView {
   const blocks: Block[] = JSON.parse(row.blocks_en);
   const vi: (string | null)[] = row.blocks_vi ? JSON.parse(row.blocks_vi) : blocks.map(() => null);
   const engines: (Engine | null)[] = row.engines ? JSON.parse(row.engines) : blocks.map(() => null);
-  const idx = blocks.map((b, i) => (b.t && b.k !== 'pre' ? i : -1)).filter((i) => i >= 0);
+  // Bản dịch hỏng: đoạn "đã dịch" mà vẫn chủ yếu là chữ Thái/Hàn/Nhật… (dịch trước khi MyLife nhận ra ngôn ngữ gốc,
+  // dịch vụ tưởng là tiếng Anh nên chỉ dịch lác đác vài từ) → coi như chưa dịch để dịch lại.
+  let bad = 0;
+  vi.forEach((x, i) => {
+    if (!x || !blocks[i]) return;
+    const src = detectLang(blocks[i].t);
+    if (isAuto(src) && detectLang(x) === src) { vi[i] = null; bad++; }
+  });
+  // Phần đuôi sau bài (bài liên quan, hộp đăng ký…) không hiển thị nên cũng không dịch.
+  const end = articleEnd(blocks);
+  const idx = blocks.map((b, i) => (b.t && b.k !== 'pre' && i < end ? i : -1)).filter((i) => i >= 0);
   return {
-    row,
+    row: bad && row.status === 'translated' ? { ...row, status: 'partial' } : row,
+    end,
     blocks,
     vi,
     engines,
@@ -101,9 +115,10 @@ export async function translateStep(env: Env, itemId: number, maxChunks: number,
     const vw = viewOf({ ...row, blocks_vi: JSON.stringify(v.vi) });
     return { done, status, translated: vw.translatedCount, total: vw.translatableCount, rateLimited };
   };
+  row.status = v.row.status; // có đoạn dịch hỏng → không còn là "đã dịch"
   if (row.status === 'translated') return progress('translated', 0, false);
   // Dịch lại bằng AI: coi các đoạn đang là bản dịch máy như chưa dịch (nhưng vẫn giữ để hiển thị tới khi có bản AI).
-  const pending = () => v.vi.map((x, i) => (row.want_ai && v.engines[i] && !AI_ENGINES.includes(v.engines[i]!) ? null : x));
+  const pending = () => v.vi.map((x, i) => (i >= v.end ? '' : row.want_ai && v.engines[i] && !AI_ENGINES.includes(v.engines[i]!) ? null : x));
   const todo = makeChunks(v.blocks, pending()).slice(0, maxChunks);
   let done = 0;
   let stoppedByQuota = false;
@@ -136,6 +151,7 @@ export async function translateStep(env: Env, itemId: number, maxChunks: number,
     throw new QuotaExhausted('Hết hạn mức dịch miễn phí');
   }
   const remaining = makeChunks(v.blocks, pending()).length;
+  if (remaining === 0) await translateTitle(env, itemId).catch(() => {});
   return { ...progress(remaining === 0 ? 'translated' : row.status, done, rateLimited), error: lastError };
 }
 
@@ -190,4 +206,12 @@ export async function cleanupFullTexts(env: Env): Promise<string> {
        AND item_id NOT IN (SELECT item_id FROM captures WHERE kept = 1 AND item_id IS NOT NULL)`
   ).bind(cutoff).run();
   return `Dọn toàn văn cũ: ${r.meta.changes ?? 0}`;
+}
+
+/** Bài tiếng châu Á chưa có tiêu đề tiếng Việt (ngoài suất tự dịch 10 bài/ngày): dịch luôn tiêu đề + mô tả khi anh bấm "Dịch bài này". */
+async function translateTitle(env: Env, itemId: number): Promise<void> {
+  const it = await env.DB.prepare('SELECT * FROM items WHERE id = ? AND title_vi IS NULL').bind(itemId).first<ItemRow>();
+  if (!it || !isAuto(itemLang(it))) return;
+  const vi = (await translateChunk(env, [it.title_en, (it.abstract_en ?? '').slice(0, 500) || '—'], false)).vi;
+  await env.DB.prepare('UPDATE items SET title_vi = ?, summary_vi = ? WHERE id = ?').bind(vi[0] || it.title_en, vi[1] && vi[1] !== '—' ? vi[1] : null, itemId).run();
 }

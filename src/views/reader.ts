@@ -1,6 +1,6 @@
 import type { ItemRow } from '../types';
 import type { FullTextView } from '../fulltext';
-import { isJunkImage } from '../fulltext/extract';
+import { isJunkImage, visibleIndexes } from '../fulltext/extract';
 import { CHANNELS, timeAgoVi } from '../util';
 import { g2Sub, html, page, raw } from './layout';
 import { capName, detectLang, isAuto, itemLang, LANG_NAME, type Lang as SrcLang } from '../lang';
@@ -57,7 +57,9 @@ function isRepeatedTitle(v: FullTextView, i: number, titleEn: string) {
 }
 
 function bodyHtml(v: FullTextView, lang: Lang, titleEn: string, src: SrcLang = 'en') {
+  const keep = new Set(visibleIndexes(v.blocks)); // bỏ đuôi "bài liên quan / đăng ký" và ảnh giao diện
   return v.blocks.map((b, i) => {
+    if (!keep.has(i)) return '';
     if (isRepeatedTitle(v, i, titleEn)) return '';
     if (b.k === 'img') {
       if (isJunkImage(b.src ?? '', b.t)) return ''; // bài lưu từ trước: vẫn ẩn emoji dạng ảnh
@@ -126,7 +128,8 @@ function stateBanner(it: ItemRow, v: FullTextView, src: SrcLang = 'en') {
 }
 
 export function readerPage(it: ItemRow, v: FullTextView, lang: Lang) {
-  const heads = v.blocks.map((b, i) => ({ b, i })).filter(({ b, i }) => (b.k === 'h2' || b.k === 'h3') && !isRepeatedTitle(v, i, it.title_en));
+  const shown = new Set(visibleIndexes(v.blocks));
+  const heads = v.blocks.map((b, i) => ({ b, i })).filter(({ b, i }) => shown.has(i) && (b.k === 'h2' || b.k === 'h3') && !isRepeatedTitle(v, i, it.title_en));
   // Bài tiếng châu Á: tự dịch (tiêu đề tiếng Việt + nhãn "Dịch từ …"); nút ngôn ngữ ghi rõ bản gốc.
   const fromItem = itemLang(it);
   const src: SrcLang = isAuto(fromItem) ? fromItem : (() => { const b = detectLang(v.blocks.slice(0, 8).map((b) => b.t).join('\n')); return isAuto(b) ? b : fromItem === 'vi' ? 'vi' : 'en'; })();
