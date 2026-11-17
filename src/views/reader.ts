@@ -178,5 +178,5 @@ window.mlFs=function(d){s(Math.min(1.5,Math.max(.8,Math.round((g()+d*.1)*10)/10)
 ${isPaper ? raw(`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.getElementById('rd'),{delimiters:[{left:'$',right:'$',display:false}],throwOnError:false})"></script>`) : ''}`;
-  return page({ title, tab: 'g2', sub: g2Sub(it.channel), body });
+  return page({ title, tab: 'g2', sub: g2Sub(it.channel), body, track: it.source_id === 'manual' ? undefined : `item:${it.id}` });
 }

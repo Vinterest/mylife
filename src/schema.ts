@@ -6,6 +6,7 @@ import m4 from '../migrations/0004_sources_ai_labs.sql';
 import m5 from '../migrations/0005_sources_robotics.sql';
 import m6 from '../migrations/0006_captures.sql';
 import m7 from '../migrations/0007_sources_asia_finance.sql';
+import m8 from '../migrations/0008_reading_time.sql';
 
 /** Tách file SQL thành từng câu lệnh: bỏ chú thích "--", tách theo dấu ";" cuối câu. */
 export function splitSql(sql: string): string[] {
@@ -35,6 +36,8 @@ export async function ensureSchema(env: Env): Promise<void> {
   } else if (tables.length < 8) {
     await env.DB.batch(splitSql(m6).map((s) => env.DB.prepare(s))); // Chặng 3 · Hộp nhặt
   }
+  // Bảng thời gian đọc (Thống kê) — lệnh IF NOT EXISTS, chạy lại an toàn.
+  await env.DB.batch(splitSql(m8).map((s) => env.DB.prepare(s)));
   // Cột thêm sau. Không để trong migrations/ để tránh xung đột với lệnh tự thêm cột.
   const { results: cols } = await env.DB.prepare("SELECT name FROM pragma_table_info('items') WHERE name IN ('image_url','read_at','note')").all<{ name: string }>();
   const has = new Set(cols.map((c) => c.name));

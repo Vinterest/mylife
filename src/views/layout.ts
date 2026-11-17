@@ -116,6 +116,7 @@ export function g2Sub(cur: string): H {
     { id: 'inbox', label: 'Hộp nhặt', href: '/hoc-tap/hop-nhat', live: true },
     { id: 'read', label: 'Đã đọc', href: '/hoc-tap/da-doc', live: true },
     { id: 'notes', label: 'Sổ tay', href: '/hoc-tap/so-tay', live: true },
+    { id: 'stats', label: 'Thống kê', href: '/hoc-tap/thong-ke', live: true },
     { id: 'quota', label: 'Nguồn & hạn mức', href: '/hoc-tap/han-muc', live: true },
   ];
   // Nút Tìm kiếm: mở trang tìm, chọn sẵn phạm vi theo mục đang xem.
@@ -127,7 +128,17 @@ export function g2Sub(cur: string): H {
 <script>document.addEventListener('keydown',function(e){if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||'')&&!e.metaKey&&!e.ctrlKey){e.preventDefault();location.href=${raw(JSON.stringify(searchHref))}}})</script>`;
 }
 
-export function page(opts: { title: string; tab: string; sub?: H; body: H; badgeCount?: number }): H {
+/**
+ * Đo thời gian đọc: mỗi 5 giây cộng thêm nếu tab đang hiện và có thao tác trong 90 giây gần nhất (hoặc đang "Đọc bài").
+ * Gửi về mỗi phút và khi rời trang / tắt màn hình. Thiết bị (Máy tính / iPhone) do máy chủ nhận theo trình duyệt.
+ */
+const TRACK_JS = `(function(){var m=document.querySelector('meta[name="ml-ref"]'),ref=m?m.content:'',acc=0,last=Date.now(),act=Date.now();
+function on(){act=Date.now()}['scroll','keydown','pointerdown','pointermove','touchstart','wheel'].forEach(function(e){addEventListener(e,on,{passive:true})});
+function send(){var s=Math.round(acc/1000);if(s<1)return;acc=0;var b=JSON.stringify({s:s,r:ref});try{if(!(navigator.sendBeacon&&navigator.sendBeacon('/hoc-tap/thoi-gian',new Blob([b],{type:'text/plain'}))))fetch('/hoc-tap/thoi-gian',{method:'POST',body:b,keepalive:true,credentials:'same-origin'})}catch(e){}}
+setInterval(function(){var n=Date.now(),dt=Math.min(n-last,20000);last=n;var speaking=window.speechSynthesis&&speechSynthesis.speaking;if(document.visibilityState==='visible'&&(n-act<90000||speaking))acc+=dt;if(acc>=60000)send()},5000);
+addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')send();last=Date.now();act=Date.now()});addEventListener('pagehide',send)})()`;
+
+export function page(opts: { title: string; tab: string; sub?: H; body: H; badgeCount?: number; track?: string }): H {
   return html`<!doctype html>
 <html lang="vi">
 <head>
@@ -143,6 +154,7 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/app.css?v=19">
+${opts.track ? html`<meta name="ml-ref" content="${opts.track}">` : ''}
 <title>${opts.title} · MyLife</title>
 </head>
 <body>
@@ -153,6 +165,7 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
   )}</nav>
 ${opts.sub ?? ''}
 <main class="wrap">${opts.body}</main>
+<script>${raw(TRACK_JS)}</script>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}</script>
 </body>
 </html>`;

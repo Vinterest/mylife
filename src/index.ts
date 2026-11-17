@@ -9,6 +9,8 @@ import { READER_CSS, readerPage, type Lang } from './views/reader';
 import { SPEAK_CSS } from './views/speak';
 import { SEARCH_CSS, searchPage } from './views/search';
 import { parseScope, searchCaptures, searchItems } from './search';
+import { PERIODS, statsPage } from './views/stats';
+import { deviceOf, readingStats, recordTime } from './usage';
 import { CAPTURE_CSS, captureEditPage, capturePage, inboxPage, notebookPage } from './views/capture';
 import { olderCaptures, captureImages, createCapture, firstUrl, getCapture, imageData, listCaptures, MAX_IMAGES, processCapture, setKept, updateCapture, validateCapture, type NewCapture } from './capture';
 import { ensureFullText, translateStep, viewOf } from './fulltext';
@@ -129,6 +131,22 @@ function sameOrigin(c: { req: { header: (n: string) => string | undefined; url: 
 
 /* ---------- Trang ---------- */
 app.get('/', (c) => c.redirect('/hoc-tap'));
+
+// Thời gian đọc trang gửi về (sendBeacon). Thiết bị nhận theo trình duyệt: iPhone hoặc Máy tính.
+app.post('/hoc-tap/thoi-gian', async (c) => {
+  if (!sameOrigin(c)) return c.body(null, 400);
+  try {
+    const b = JSON.parse(await c.req.text()) as { s?: number; r?: string };
+    await recordTime(c.env, deviceOf(c.req.header('User-Agent')), String(b.r ?? ''), Number(b.s));
+  } catch { /* gói tin lỗi: bỏ qua */ }
+  return c.body(null, 204);
+});
+
+app.get('/hoc-tap/thong-ke', async (c) => {
+  const p = Number(c.req.query('ky'));
+  const period = (PERIODS as readonly number[]).includes(p) ? p : 7;
+  return c.html(statsPage(await readingStats(c.env, period), period));
+});
 
 const sortOf = (q: string | undefined): SortMode => (q === 'diem' ? 'diem' : 'moi');
 

@@ -180,7 +180,7 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
     ${older.length === 10 ? html`<div class="pager"><span></span><a class="btn2" href="/hoc-tap/hop-nhat/${older[9].id}#cu-hon">Xem 10 mục cũ hơn nữa ›</a></div>` : ''}
   </div>
 </section>`;
-  return page({ title: c.title || 'Mục nhặt', tab: 'g2', sub: g2Sub('inbox'), body });
+  return page({ title: c.title || 'Mục nhặt', tab: 'g2', sub: g2Sub('inbox'), body, track: `capture:${c.id}` });
 }
 
 export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[] }) {
