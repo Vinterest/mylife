@@ -15,7 +15,7 @@ export function isJunkImage(src: string, alt = '', cls = ''): boolean {
   if (/(^|[_-])(logo|icon|avatar|sprite|mascot)([_.@-]|\d)/.test(file) && !/\d{4}/.test(file)) return true;
   // Ảnh đại diện tác giả (Hugging Face, headshot…), ảnh giữ chỗ khi video chưa tải, banner quảng cáo theo tên.
   if (/\/avatars?\/|cdn-avatars\.|\/fallback\/|\/authors?\//i.test(src)) return true;
-  if (/(^|[_-])headshot|^(profile|author|gravatar)([_.-]|\d)|banner[-_]?ad|[-_]ad[-_.]|advert|video_poster/.test(file)) return true;
+  if (/(^|[_-])headshot|^(profile|author|gravatar)([_.-]|\d)|banner[-_]?ad|[-_]ad[-_.]|(^|[_-])advert(isement)?([_.-]|$)|video_poster/.test(file)) return true;
   // Ảnh thu nhỏ WordPress cỡ ≤ 200px (vd. "-127x150.jpg"): thường là ảnh tác giả / bài liên quan.
   const wp = /-(\d{2,4})x(\d{2,4})\.(jpe?g|png|webp|gif)$/.exec(file);
   if (wp && Number(wp[1]) <= 200 && Number(wp[2]) <= 200) return true;
