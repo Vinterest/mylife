@@ -116,19 +116,23 @@ export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Recor
   return page({ title: 'Học tập AI', tab: 'g2', sub: g2Sub('today'), body });
 }
 
+/** Cách xếp mặc định của từng kênh: AI thế giới xem tin mới nhất trước, các kênh khác xem điểm cao trước. */
+export const defaultSort = (ch: keyof typeof CHANNELS): SortMode => (ch === 'ai' ? 'moi' : 'diem');
+
 /** Số bài mỗi trang ở các danh sách kênh và Đã đọc. */
 export const PER_PAGE = 20;
 
 export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[]; pageNo: number; hasMore: boolean; sort: SortMode; total: number }) {
   const ch = CHANNELS[p.channel];
-  const xq = p.sort === 'moi' ? '&xep=moi' : '';
+  const def = defaultSort(p.channel);
+  const xq = p.sort === def ? '' : `&xep=${p.sort}`;
   const back = `/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo}${xq}`;
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh one"><h2>${ch.name}</h2>${sortSwitch(`/hoc-tap/kenh/${ch.slug}`, p.sort, 'diem')}</div>
+    <div class="sh one"><h2>${ch.name}</h2>${sortSwitch(`/hoc-tap/kenh/${ch.slug}`, p.sort, def)}</div>
     ${p.items.length ? p.items.map((it) => readRow(it, back)) : html`<div class="empty">Chưa có bài trong kênh này.</div>`}
-    ${pager(`/hoc-tap/kenh/${ch.slug}${p.sort === 'moi' ? '?xep=moi' : ''}`, p.pageNo, Math.ceil(p.total / PER_PAGE), p.total, 'bài chưa đọc')}
+    ${pager(`/hoc-tap/kenh/${ch.slug}${p.sort === def ? '' : `?xep=${p.sort}`}`, p.pageNo, Math.ceil(p.total / PER_PAGE), p.total, 'bài chưa đọc')}
   </div>
 </section>`;
   return page({ title: ch.name, tab: 'g2', sub: g2Sub(p.channel), body });

@@ -3,7 +3,7 @@ import type { Env } from './types';
 import { quotaSnapshot } from './ai/quota';
 import type { ItemRow } from './types';
 import { allSources, getItem, latestByChannel, livePicks, readItems, recentJobs, weeklyCounts, type SortMode } from './db';
-import { channelPage, homePage, quotaPage, readPage, soonPage } from './views/pages';
+import { channelPage, defaultSort, homePage, quotaPage, readPage, soonPage } from './views/pages';
 import { CSS } from './views/layout';
 import { READER_CSS, readerPage, type Lang } from './views/reader';
 import { SPEAK_CSS } from './views/speak';
@@ -163,8 +163,10 @@ app.get('/hoc-tap', async (c) => {
 app.get('/hoc-tap/kenh/:slug', async (c) => {
   const ch = channelBySlug(c.req.param('slug'));
   if (!ch) return c.notFound();
-  // Trang từng kênh: mặc định xếp Điểm cao; ?xep=moi để xem mới nhất.
-  const sort: SortMode = c.req.query('xep') === 'moi' ? 'moi' : 'diem';
+  // Trang từng kênh: mặc định xếp Điểm cao; riêng AI thế giới mặc định Mới nhất. ?xep=moi|diem để đổi.
+  const def = defaultSort(ch);
+  const q = c.req.query('xep');
+  const sort: SortMode = q === 'moi' || q === 'diem' ? q : def;
   const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
   const [rows, total] = await Promise.all([
     latestByChannel(c.env, ch, 21, (pageNo - 1) * 20, sort),
