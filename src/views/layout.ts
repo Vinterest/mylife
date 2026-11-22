@@ -98,6 +98,16 @@ form.inline{display:inline}
 .scroll{overflow-x:auto}
 .empty{padding:1.2em;border:1px dashed #C9D1DA;border-radius:6px;color:var(--mut)}
 .pager{display:flex;gap:1em;justify-content:space-between;padding-top:1em}
+/* Thanh phân trang có số: vừa một hàng trên iPhone (tối đa 9 ô) */
+.pgn{display:flex;flex-direction:column;align-items:center;gap:.45em;padding:1.4em 0 .6em}
+.pgn ol{list-style:none;display:flex;flex-wrap:nowrap;gap:4px;margin:0;padding:0}
+.pgn a,.pgn span.cur,.pgn span.gap,.pgn span.off{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:38px;padding:0 .35em;border-radius:8px;font-weight:600;font-size:.95em;box-sizing:border-box}
+.pgn a{border:1px solid var(--line);background:#fff;color:var(--ac)}
+.pgn a:hover{border-color:var(--ac)}
+.pgn span.cur{background:var(--ac);color:#fff;border:1px solid var(--ac)}
+.pgn span.gap{min-width:18px;color:var(--mut);padding:0}
+.pgn span.off{border:1px solid var(--line);color:#C3CBD3}
+@media (max-width:400px){.pgn a,.pgn span.cur,.pgn span.off{min-width:34px;height:36px}.pgn ol{gap:3px}}
 `;
 
 export const TABS: { id: string; label: string; href: string; color?: string; live: boolean }[] = [
@@ -172,3 +182,28 @@ ${opts.sub ?? ''}
 }
 
 export { html, raw };
+
+/**
+ * Thanh phân trang có số trang: ‹ 1 … 5 [6] 7 … 35 ›  + dòng "Trang 6/35 · 691 bài".
+ * `base` là đường dẫn trang 1 (có thể kèm tham số khác, vd. ?xep=moi); trang n thêm &trang=n.
+ */
+export function pager(base: string, pageNo: number, totalPages: number, totalItems?: number, unit = 'bài'): H {
+  if (totalPages <= 1) return html`${totalItems ? html`<div class="pgn"><span class="meta">${totalItems} ${unit}</span></div>` : ''}`;
+  const cur = Math.min(Math.max(1, pageNo), totalPages);
+  const href = (n: number) => (n === 1 ? base : `${base}${base.includes('?') ? '&' : '?'}trang=${n}`);
+  // Luôn có trang đầu, trang cuối và 1 trang mỗi bên trang hiện tại; khoảng trống thay bằng "…".
+  const want = new Set([1, totalPages, cur - 1, cur, cur + 1].filter((n) => n >= 1 && n <= totalPages));
+  if (cur <= 3) [2, 3, 4].forEach((n) => n < totalPages && want.add(n));
+  if (cur >= totalPages - 2) [totalPages - 3, totalPages - 2, totalPages - 1].forEach((n) => n > 1 && want.add(n));
+  const nums = [...want].sort((a, b) => a - b);
+  const cells: H[] = [];
+  nums.forEach((n, k) => {
+    if (k > 0 && n - nums[k - 1] > 1) cells.push(html`<li><span class="gap">…</span></li>`);
+    cells.push(n === cur ? html`<li><span class="cur" aria-current="page">${n}</span></li>` : html`<li><a href="${href(n)}">${n}</a></li>`);
+  });
+  return html`<nav class="pgn" aria-label="Phân trang"><ol>
+    <li>${cur > 1 ? html`<a href="${href(cur - 1)}" aria-label="Trang trước" rel="prev">‹</a>` : html`<span class="off">‹</span>`}</li>
+    ${cells}
+    <li>${cur < totalPages ? html`<a href="${href(cur + 1)}" aria-label="Trang sau" rel="next">›</a>` : html`<span class="off">›</span>`}</li>
+  </ol><span class="meta">Trang ${cur}/${totalPages}${totalItems ? ` · ${totalItems} ${unit}` : ''}</span></nav>`;
+}

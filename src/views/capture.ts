@@ -2,7 +2,7 @@ import { raw } from 'hono/html';
 import type { CaptureImage, CaptureRow } from '../capture';
 import type { ItemRow } from '../types';
 import { CHANNELS, CHANNEL_ORDER, timeAgoVi } from '../util';
-import { g2Sub, html, page } from './layout';
+import { g2Sub, html, page, pager } from './layout';
 
 export const CAPTURE_CSS = `
 .drop{padding:.7em}
@@ -124,12 +124,9 @@ export function inboxPage(p: { items: CaptureRow[]; total: number; pageNo: numbe
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>Hộp nhặt · ${p.total} mục</h2><span class="meta">mới nhặt trước${p.pageNo > 1 ? ` · trang ${p.pageNo}` : ''}</span></div>
+    <div class="sh"><h2>Hộp nhặt · ${p.total} mục</h2><span class="meta">mới nhặt trước</span></div>
     ${p.items.length ? p.items.map((c) => capRow(c, back)) : html`<div class="empty">Hộp nhặt trống. Chọn ảnh chụp, dán link hoặc nội dung ở khung “Nhặt bài mới” để nhặt bài đầu tiên.</div>`}
-    <div class="pager">
-      ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/hop-nhat?trang=${p.pageNo - 1}">‹ Mới hơn</a>` : html`<span></span>`}
-      ${p.hasMore ? html`<a class="btn2" href="/hoc-tap/hop-nhat?trang=${p.pageNo + 1}">Cũ hơn ›</a>` : ''}
-    </div>
+    ${pager('/hoc-tap/hop-nhat', p.pageNo, Math.ceil(p.total / 50), p.total, 'mục')}
   </div>
   <aside class="colside" style="order:-1">
     ${captureForm(p.pageNo === 1 && p.total < 3)}
@@ -183,7 +180,9 @@ export function capturePage(c: CaptureRow, imgs: CaptureImage[], item: ItemRow |
   return page({ title: c.title || 'Mục nhặt', tab: 'g2', sub: g2Sub('inbox'), body, track: `capture:${c.id}` });
 }
 
-export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[] }) {
+const NOTE_PER_PAGE = 20;
+
+export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[]; pageNo?: number }) {
   type Entry = { at: string; html: unknown };
   const entries: Entry[] = [
     ...p.captures.map((c) => ({ at: c.kept_at || c.created_at, html: capRow(c, '/hoc-tap/so-tay') })),
@@ -200,11 +199,16 @@ export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[] }) {
       </article>`,
     })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
+  // 20 mục mỗi trang, theo thứ tự lúc lưu.
+  const pages = Math.max(1, Math.ceil(entries.length / NOTE_PER_PAGE));
+  const pageNo = Math.min(Math.max(1, p.pageNo ?? 1), pages);
+  const shown = entries.slice((pageNo - 1) * NOTE_PER_PAGE, pageNo * NOTE_PER_PAGE);
   const body = html`
 <section class="cols">
   <div class="colmain">
     <div class="sh"><h2>Sổ tay · ${entries.length} mục</h2><span class="meta">mới lưu lên đầu · lưu vĩnh viễn</span></div>
-    ${entries.length ? entries.map((e) => e.html) : html`<div class="empty">Sổ tay trống. Bấm “Lưu Sổ tay” ở bài báo hoặc mục nhặt để lưu vĩnh viễn.</div>`}
+    ${entries.length ? shown.map((e) => e.html) : html`<div class="empty">Sổ tay trống. Bấm “Lưu Sổ tay” ở bài báo hoặc mục nhặt để lưu vĩnh viễn.</div>`}
+    ${pager('/hoc-tap/so-tay', pageNo, Math.ceil(entries.length / NOTE_PER_PAGE), entries.length, 'mục')}
   </div>
 </section>`;
   return page({ title: 'Sổ tay', tab: 'g2', sub: g2Sub('notes'), body });

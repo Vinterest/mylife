@@ -166,8 +166,11 @@ app.get('/hoc-tap/kenh/:slug', async (c) => {
   // Trang từng kênh: mặc định xếp Điểm cao; ?xep=moi để xem mới nhất.
   const sort: SortMode = c.req.query('xep') === 'moi' ? 'moi' : 'diem';
   const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
-  const rows = await latestByChannel(c.env, ch, 21, (pageNo - 1) * 20, sort);
-  return c.html(channelPage({ channel: ch, items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20, sort }));
+  const [rows, total] = await Promise.all([
+    latestByChannel(c.env, ch, 21, (pageNo - 1) * 20, sort),
+    c.env.DB.prepare('SELECT COUNT(*) AS n FROM items WHERE channel = ? AND dismissed = 0 AND read_at IS NULL').bind(ch).first<{ n: number }>(),
+  ]);
+  return c.html(channelPage({ channel: ch, items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20, sort, total: total?.n ?? 0 }));
 });
 
 app.get('/hoc-tap/bai/:id', async (c) => {
@@ -355,12 +358,12 @@ app.get('/hoc-tap/anh/:id{[0-9]+}', async (c) => {
 
 app.get('/hoc-tap/so-tay', async (c) => {
   // Xếp theo lúc bấm "Lưu Sổ tay", mới lưu lên đầu.
-  const captures = await listCaptures(c.env, 'c.kept = 1', 300, 0, 'COALESCE(c.kept_at, c.created_at) DESC');
+  const captures = await listCaptures(c.env, 'c.kept = 1', 2000, 0, 'COALESCE(c.kept_at, c.created_at) DESC');
   const { results: items } = await c.env.DB.prepare(
     `SELECT i.*, s.name AS source_name FROM items i JOIN sources s ON s.id = i.source_id
-     WHERE i.kept = 1 AND i.source_id <> 'manual' ORDER BY COALESCE(i.kept_at, i.fetched_at) DESC LIMIT 300`
+     WHERE i.kept = 1 AND i.source_id <> 'manual' ORDER BY COALESCE(i.kept_at, i.fetched_at) DESC LIMIT 2000`
   ).all<ItemRow>();
-  return c.html(notebookPage({ captures, items }));
+  return c.html(notebookPage({ captures, items, pageNo: Number(c.req.query('trang')) || 1 }));
 });
 
 app.post('/hoc-tap/bai/:id{[0-9]+}/ghi-chu', async (c) => {

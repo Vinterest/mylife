@@ -1,7 +1,7 @@
 import { isJunkImage } from '../fulltext/extract';
 import type { ItemRow, SourceRow } from '../types';
 import { CHANNELS, CHANNEL_ORDER, timeAgoVi } from '../util';
-import { g2Sub, html, page } from './layout';
+import { g2Sub, html, page, pager } from './layout';
 import type { quotaSnapshot } from '../ai/quota';
 import type { SortMode } from '../db';
 import { capName, isAuto, itemLang, LANG_NAME } from '../lang';
@@ -116,7 +116,10 @@ export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Recor
   return page({ title: 'Học tập AI', tab: 'g2', sub: g2Sub('today'), body });
 }
 
-export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[]; pageNo: number; hasMore: boolean; sort: SortMode }) {
+/** Số bài mỗi trang ở các danh sách kênh và Đã đọc. */
+export const PER_PAGE = 20;
+
+export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[]; pageNo: number; hasMore: boolean; sort: SortMode; total: number }) {
   const ch = CHANNELS[p.channel];
   const xq = p.sort === 'moi' ? '&xep=moi' : '';
   const back = `/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo}${xq}`;
@@ -125,10 +128,7 @@ export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[
   <div class="colmain">
     <div class="sh one"><h2>${ch.name}</h2>${sortSwitch(`/hoc-tap/kenh/${ch.slug}`, p.sort, 'diem')}</div>
     ${p.items.length ? p.items.map((it) => readRow(it, back)) : html`<div class="empty">Chưa có bài trong kênh này.</div>`}
-    <div class="pager">
-      ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo - 1}${xq}">‹ Mới hơn</a>` : html`<span></span>`}
-      ${p.hasMore ? html`<a class="btn2" href="/hoc-tap/kenh/${ch.slug}?trang=${p.pageNo + 1}${xq}">Cũ hơn ›</a>` : ''}
-    </div>
+    ${pager(`/hoc-tap/kenh/${ch.slug}${p.sort === 'moi' ? '?xep=moi' : ''}`, p.pageNo, Math.ceil(p.total / PER_PAGE), p.total, 'bài chưa đọc')}
   </div>
 </section>`;
   return page({ title: ch.name, tab: 'g2', sub: g2Sub(p.channel), body });
@@ -139,14 +139,11 @@ export function readPage(p: { items: ItemRow[]; pageNo: number; hasMore: boolean
   const body = html`
 <section class="cols">
   <div class="colmain">
-    <div class="sh"><h2>Đã đọc · ${p.total} bài</h2><span class="meta">mới đọc trước · trang ${p.pageNo} · bấm “↩ Chưa đọc” để đưa bài về danh sách</span></div>
+    <div class="sh"><h2>Đã đọc · ${p.total} bài</h2><span class="meta">mới đọc trước · bấm “↩ Chưa đọc” để đưa bài về danh sách</span></div>
     ${p.items.length
       ? p.items.map((it) => html`<div class="rdmark">Đọc xong ${timeAgoVi(it.read_at!)}</div>${readRow(it, back)}`)
       : html`<div class="empty">Chưa có bài nào. Bấm “✓ Đã đọc” ở mỗi bài khi anh đọc hoặc review xong, bài sẽ chuyển vào đây.</div>`}
-    <div class="pager">
-      ${p.pageNo > 1 ? html`<a class="btn2" href="/hoc-tap/da-doc?trang=${p.pageNo - 1}">‹ Mới hơn</a>` : html`<span></span>`}
-      ${p.hasMore ? html`<a class="btn2" href="/hoc-tap/da-doc?trang=${p.pageNo + 1}">Cũ hơn ›</a>` : ''}
-    </div>
+    ${pager('/hoc-tap/da-doc', p.pageNo, Math.ceil(p.total / PER_PAGE), p.total)}
   </div>
 </section>`;
   return page({ title: 'Đã đọc', tab: 'g2', sub: g2Sub('read'), body });
