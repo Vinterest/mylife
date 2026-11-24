@@ -63,6 +63,7 @@ export interface ItemRow {
   note?: string | null;
   kept: number;
   kept_at?: string | null; // lúc bấm "Lưu Sổ tay"
+  country?: string | null; // nước ưu tiên của bài (US, CN, TH…), "other", "" hoặc NULL (chưa chấm)
   dismissed: number;
   source_name?: string;
   source_weight?: number;

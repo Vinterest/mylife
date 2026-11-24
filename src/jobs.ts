@@ -1,7 +1,7 @@
 import type { Env } from './types';
 import { processPendingCaptures } from './capture';
 import { autoTranslateAsian } from './asia';
-import { crawlSource, markDue, nextDueSource } from './crawl';
+import { crawlSource, markDue, nextDueSource, rescoreCountries } from './crawl';
 import { cleanupFullTexts, fetchNextFullText, translateRequested } from './fulltext';
 
 /*
@@ -47,6 +47,7 @@ export async function tick(env: Env): Promise<string> {
     await step(notes, `Crawl ${src.id}`, () => crawlSource(env, src));
     crawled++;
   }
+  await step(notes, 'Ưu tiên quốc gia', () => rescoreCountries(env));
   await step(notes, 'Hộp nhặt', () => processPendingCaptures(env));
   await step(notes, 'Tự dịch tiếng châu Á', () => autoTranslateAsian(env));
   await step(notes, 'Dịch', () => translateRequested(env, 2));

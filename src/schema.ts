@@ -55,6 +55,9 @@ export async function ensureSchema(env: Env): Promise<void> {
     ]);
   }
   if (!has.has('note')) await env.DB.prepare('ALTER TABLE items ADD COLUMN note TEXT').run(); // ghi chú Sổ tay
+  // Quốc gia của bài (ưu tiên tin AI theo nước). NULL = chưa chấm lại; nhịp 5 phút tự chấm dần các bài cũ.
+  const cc = await env.DB.prepare("SELECT 1 AS x FROM pragma_table_info('items') WHERE name = 'country'").first();
+  if (!cc) await env.DB.prepare('ALTER TABLE items ADD COLUMN country TEXT').run();
   // Sổ tay xếp theo lúc bấm "Lưu Sổ tay". Đồng thời cứu các bài nhặt bị "mất": trước đây bấm Lưu Sổ tay ở danh sách
   // kênh chỉ đánh dấu bài (items) mà không đánh dấu mục nhặt — trang Sổ tay lại chỉ đọc mục nhặt.
   const kc = await env.DB.prepare("SELECT 1 AS x FROM pragma_table_info('items') WHERE name = 'kept_at'").first();

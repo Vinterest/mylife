@@ -1,4 +1,5 @@
 import type { Channel } from './types';
+import { countryOf } from './country';
 
 export const CHANNELS: Record<Channel, { name: string; short: string; slug: string; weight: number }> = {
   ai: { name: 'AI thế giới', short: 'AI thế giới', slug: 'ai-the-gioi', weight: 22 },
@@ -83,11 +84,13 @@ export function keywordHits(text: string): number {
 }
 
 /** Điểm "đáng đọc" 0–100. */
-export function scoreItem(p: { channel: Channel; publishedAt: string; text: string; sourceWeight: number }, now = new Date()): number {
+export function scoreItem(p: { channel: Channel; publishedAt: string; text: string; sourceWeight: number; geo?: number }, now = new Date()): number {
   const ageH = (now.getTime() - new Date(p.publishedAt).getTime()) / 3600000;
   const recency = 25 * Math.max(0, 1 - ageH / 72);
   const kw = Math.min(25, 6 * keywordHits(p.text));
-  return Math.round(Math.min(100, CHANNELS[p.channel].weight + recency + kw + Math.min(20, p.sourceWeight)));
+  // Ưu tiên tin của Mỹ, Trung Quốc và 8 nước châu Á anh chọn (+12); bài chỉ nói về nước khác (−8).
+  const geo = p.geo ?? countryOf(p.text).delta;
+  return Math.round(Math.max(0, Math.min(100, CHANNELS[p.channel].weight + recency + kw + Math.min(20, p.sourceWeight) + geo)));
 }
 
 /** Khớp từ khóa nguồn (không phân biệt hoa thường; từ ngắn như "AI" khớp nguyên từ). */

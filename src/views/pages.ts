@@ -2,6 +2,7 @@ import { isJunkImage } from '../fulltext/extract';
 import type { ItemRow, SourceRow } from '../types';
 import { CHANNELS, CHANNEL_ORDER, timeAgoVi } from '../util';
 import { g2Sub, html, page, pager } from './layout';
+import { COUNTRY_NAME, type Country } from '../country';
 import type { quotaSnapshot } from '../ai/quota';
 import type { SortMode } from '../db';
 import { capName, isAuto, itemLang, LANG_NAME } from '../lang';
@@ -58,7 +59,7 @@ function readRow(it: ItemRow, back: string) {
   return html`<article class="rw">
   ${thumb(it)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
-    <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}</span>${thaiTag(it)}
+    <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}${countryLabel(it)}</span>${thaiTag(it)}
     <a class="t2" href="/hoc-tap/bai/${it.id}" lang="${tl(it)}">${newBadge(it)}${title(it)}</a>
     <p class="sum" lang="${it.summary_vi && isAuto(itemLang(it)) ? 'vi' : itemLang(it)}">${snippet(it)}</p>
     ${itemActions(it, back)}
@@ -118,6 +119,9 @@ export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Recor
 
 /** Cách xếp mặc định của từng kênh: AI thế giới xem tin mới nhất trước, các kênh khác xem điểm cao trước. */
 export const defaultSort = (ch: keyof typeof CHANNELS): SortMode => (ch === 'ai' ? 'moi' : 'diem');
+
+/** Tên nước ưu tiên của bài (để biết vì sao bài được cộng điểm). */
+export const countryLabel = (it: { country?: string | null }) => (it.country && it.country in COUNTRY_NAME ? ` · ${COUNTRY_NAME[it.country as Country]}` : '');
 
 /** Số bài mỗi trang ở các danh sách kênh và Đã đọc. */
 export const PER_PAGE = 20;

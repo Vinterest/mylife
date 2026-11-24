@@ -1,3 +1,4 @@
+import { countryOf } from '../country';
 import type { Env, RawItem, SourceRow } from '../types';
 import { matchesKeywords, normalizeTitle, readMinutes, scoreItem } from '../util';
 import { parseArxiv, parseFeed, parseListing, parsePageMeta, parseSitemap } from './parse';
@@ -44,12 +45,14 @@ async function saveItems(env: Env, src: SourceRow, raw: RawItem[]): Promise<numb
     seen.add(key);
     // Ngày đăng ở tương lai (lỗi feed) sẽ chiếm đầu danh sách mãi → không cho vượt quá lúc lấy về.
     const publishedAt = new Date(Math.min(it.published.getTime(), now.getTime())).toISOString();
-    const score = scoreItem({ channel: src.channel, publishedAt, text: `${it.title} ${it.abstract}`, sourceWeight: src.weight }, now);
+    const geo = countryOf(`${it.title} ${it.abstract}`);
+    const country = geo.code;
+    const score = scoreItem({ channel: src.channel, publishedAt, text: `${it.title} ${it.abstract}`, sourceWeight: src.weight, geo: geo.delta }, now);
     stmts.push(
       env.DB.prepare(
-        `INSERT OR IGNORE INTO items (source_id, channel, url, title_key, title_en, authors, published_at, fetched_at, abstract_en, score, read_minutes, image_url)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM items WHERE title_key = ?)`
-      ).bind(src.id, src.channel, it.url, key, it.title, it.authors ?? null, publishedAt, now.toISOString(), it.abstract || null, score, readMinutes(it.abstract, it.isPaper), it.image ?? null, key)
+        `INSERT OR IGNORE INTO items (source_id, channel, url, title_key, title_en, authors, published_at, fetched_at, abstract_en, score, read_minutes, image_url, country)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM items WHERE title_key = ?)`
+      ).bind(src.id, src.channel, it.url, key, it.title, it.authors ?? null, publishedAt, now.toISOString(), it.abstract || null, score, readMinutes(it.abstract, it.isPaper), it.image ?? null, country, key)
     );
     // Bài đã có từ trước nhưng chưa có ảnh → bổ sung ảnh từ feed.
     if (it.image) fill.push(env.DB.prepare('UPDATE items SET image_url = ? WHERE url = ? AND image_url IS NULL').bind(it.image, it.url));
@@ -136,4 +139,21 @@ export async function crawlSource(env: Env, src: SourceRow): Promise<string> {
 export async function markDue(env: Env, kind: 'rss' | 'arxiv'): Promise<string> {
   const r = await env.DB.prepare(`UPDATE sources SET last_run_at = NULL WHERE enabled = 1 AND ${kind === 'arxiv' ? "kind = 'arxiv'" : "kind <> 'arxiv'"}`).run();
   return `Đã xếp ${r.meta.changes ?? 0} nguồn ${kind} vào hàng chạy`;
+}
+
+/**
+ * Chấm lại điểm theo quốc gia cho các bài có từ trước (country IS NULL): cộng +12 / trừ 8 vào điểm đang lưu.
+ * Mỗi nhịp tối đa 30 bài (giữ trong giới hạn CPU gói Free), gộp một lượt ghi.
+ */
+export async function rescoreCountries(env: Env): Promise<string> {
+  const { results } = await env.DB.prepare(
+    'SELECT id, title_en, abstract_en, score FROM items WHERE country IS NULL ORDER BY id DESC LIMIT 30'
+  ).all<{ id: number; title_en: string; abstract_en: string | null; score: number }>();
+  if (!results.length) return '';
+  const stmts = results.map((it) => {
+    const c = countryOf(`${it.title_en} ${it.abstract_en ?? ''}`);
+    return env.DB.prepare('UPDATE items SET country = ?, score = ? WHERE id = ?').bind(c.code, Math.max(0, Math.min(100, (it.score ?? 0) + c.delta)), it.id);
+  });
+  await env.DB.batch(stmts);
+  return `Chấm lại điểm theo quốc gia: ${results.length} bài`;
 }

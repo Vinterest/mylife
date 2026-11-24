@@ -261,6 +261,8 @@ export async function setKept(env: Env, kind: 'item' | 'capture', id: number, wa
     const at = on ? now : null;
     const stmts = [env.DB.prepare('UPDATE items SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE id = ?').bind(on ? 1 : 0, on ? 1 : 0, at, id)];
     if (it.source_id === 'manual') stmts.push(env.DB.prepare('UPDATE captures SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE item_id = ?').bind(on ? 1 : 0, on ? 1 : 0, at, id));
+    // Lưu Sổ tay = đã đọc xong: chuyển luôn vào tab Đã đọc (bỏ lưu thì vẫn giữ trạng thái đã đọc).
+    if (on) stmts.push(env.DB.prepare('UPDATE items SET read_at = COALESCE(read_at, ?) WHERE id = ?').bind(now, id));
     await env.DB.batch(stmts);
     return;
   }
@@ -270,6 +272,8 @@ export async function setKept(env: Env, kind: 'item' | 'capture', id: number, wa
   const at = on ? now : null;
   const stmts = [env.DB.prepare('UPDATE captures SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE id = ?').bind(on ? 1 : 0, on ? 1 : 0, at, id)];
   if (c.item_id) stmts.push(env.DB.prepare(`UPDATE items SET kept = ?, kept_at = CASE WHEN ? = 1 AND kept = 1 AND kept_at IS NOT NULL THEN kept_at ELSE ? END WHERE id = ? AND source_id = 'manual'`).bind(on ? 1 : 0, on ? 1 : 0, at, c.item_id));
+  // Bài của mục nhặt (hiện trong kênh) cũng coi là đã đọc khi lưu Sổ tay.
+  if (c.item_id && on) stmts.push(env.DB.prepare(`UPDATE items SET read_at = COALESCE(read_at, ?) WHERE id = ? AND source_id = 'manual'`).bind(now, c.item_id));
   await env.DB.batch(stmts);
 }
 
