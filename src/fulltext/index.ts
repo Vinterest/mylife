@@ -161,12 +161,16 @@ export async function translateStep(env: Env, itemId: number, maxChunks: number,
  */
 export async function fetchNextFullText(env: Env): Promise<string> {
   const since = new Date(Date.now() - 14 * 86400000).toISOString();
-  const it = await env.DB.prepare(
-    `SELECT i.* FROM items i LEFT JOIN fulltexts f ON f.item_id = i.id
-     WHERE f.item_id IS NULL AND i.dismissed = 0 AND i.attempts < 3 AND (i.kept = 1 OR i.published_at >= ?)
-     ORDER BY i.kept DESC, (i.id IN (SELECT item_id FROM daily_picks WHERE day = ?)) DESC, i.published_at DESC
-     LIMIT 1`
-  ).bind(since, vnDay()).first<ItemRow>();
+  // Hàng chờ toàn văn = chỉ mục idx_items_ft_todo (attempts < 3: chưa có toàn văn, trigger đặt 9 khi đã có).
+  // Bài đã Lưu Sổ tay trước (chỉ mục idx_items_kept), rồi bài 14 ngày gần đây.
+  const it =
+    (await env.DB.prepare(`SELECT i.* FROM items i INDEXED BY idx_items_kept WHERE i.kept = 1 AND i.attempts < 3 AND i.dismissed = 0 LIMIT 1`).first<ItemRow>()) ??
+    (await env.DB.prepare(
+      `SELECT i.* FROM items i INDEXED BY idx_items_ft_todo
+       WHERE i.attempts < 3 AND i.dismissed = 0 AND i.published_at >= ?
+       ORDER BY (i.id IN (SELECT item_id FROM daily_picks WHERE day = ?)) DESC, i.published_at DESC
+       LIMIT 1`
+    ).bind(since, vnDay()).first<ItemRow>());
   if (!it) return '';
   await env.DB.prepare('UPDATE items SET attempts = attempts + 1 WHERE id = ?').bind(it.id).run();
   const r = await ensureFullText(env, it);

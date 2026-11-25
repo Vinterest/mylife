@@ -147,7 +147,7 @@ export async function markDue(env: Env, kind: 'rss' | 'arxiv'): Promise<string> 
  */
 export async function rescoreCountries(env: Env): Promise<string> {
   const { results } = await env.DB.prepare(
-    'SELECT id, title_en, abstract_en, score FROM items WHERE country IS NULL ORDER BY id DESC LIMIT 30'
+    'SELECT id, title_en, abstract_en, score FROM items INDEXED BY idx_items_country_todo WHERE country IS NULL ORDER BY id DESC LIMIT 30'
   ).all<{ id: number; title_en: string; abstract_en: string | null; score: number }>();
   if (!results.length) return '';
   const stmts = results.map((it) => {

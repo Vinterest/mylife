@@ -16,7 +16,7 @@ const PICKS_PER_CHANNEL = 20;
 export async function livePicks(env: Env, sort: SortMode): Promise<ItemRow[]> {
   const since = new Date(Date.now() - 72 * 3600000).toISOString();
   const { results } = await env.DB.prepare(
-    `SELECT ${ITEM_COLS} FROM items i JOIN sources s ON s.id = i.source_id
+    `SELECT ${ITEM_COLS} FROM items i INDEXED BY idx_items_pub JOIN sources s ON s.id = i.source_id
      WHERE i.published_at >= ? AND i.dismissed = 0 AND i.read_at IS NULL
      ORDER BY i.score DESC, i.published_at DESC LIMIT 400`
   ).bind(since).all<ItemRow>();
@@ -57,7 +57,7 @@ export async function getItem(env: Env, id: number): Promise<ItemRow | null> {
 export async function weeklyCounts(env: Env): Promise<Record<string, number>> {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const { results } = await env.DB.prepare(
-    `SELECT channel, COUNT(*) AS n FROM items WHERE dismissed = 0 AND published_at >= ? GROUP BY channel`
+    `SELECT channel, COUNT(*) AS n FROM items INDEXED BY idx_items_pub WHERE published_at >= ? AND dismissed = 0 GROUP BY channel`
   ).bind(since).all<{ channel: string; n: number }>();
   return Object.fromEntries(results.map((r) => [r.channel, r.n]));
 }

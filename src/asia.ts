@@ -34,7 +34,7 @@ export async function autoTranslateAsian(env: Env): Promise<string> {
   const doneOf = (l: Lang) => used.find((r) => r.provider === counterOf(l))?.used ?? 0;
 
   const { results } = await env.DB.prepare(
-    `SELECT i.* FROM items i WHERE i.dismissed = 0 AND i.title_vi IS NULL AND (i.fetched_at >= ?1 OR i.published_at >= ?1)
+    `SELECT i.* FROM items i INDEXED BY idx_items_fetched WHERE i.fetched_at >= ?1 AND i.dismissed = 0 AND i.title_vi IS NULL
      ORDER BY i.published_at DESC LIMIT 300`
   ).bind(startOfVnDay()).all<ItemRow>();
   const groups = new Map<Lang, ItemRow[]>();
@@ -66,8 +66,9 @@ export async function autoTranslateAsian(env: Env): Promise<string> {
 
   // Phần thân: bài châu Á đã dịch tiêu đề mà chưa có toàn văn → lấy về + xếp hàng dịch (2 bài mỗi nhịp).
   const { results: cand } = await env.DB.prepare(
-    `SELECT i.* FROM items i LEFT JOIN fulltexts f ON f.item_id = i.id
-     WHERE i.title_vi IS NOT NULL AND i.dismissed = 0 AND f.item_id IS NULL AND i.fetched_at >= ? ORDER BY i.published_at DESC LIMIT 20`
+    // Hàng chờ toàn văn (chỉ mục idx_items_ft_todo: attempts < 3 = chưa có toàn văn) → chỉ đọc vài bài, không quét cả bảng.
+    `SELECT i.* FROM items i INDEXED BY idx_items_ft_todo
+     WHERE i.attempts < 3 AND i.dismissed = 0 AND i.published_at >= ? AND i.title_vi IS NOT NULL ORDER BY i.published_at DESC LIMIT 20`
   ).bind(new Date(Date.now() - 3 * 86400000).toISOString()).all<ItemRow>();
   for (const it of cand.filter((x) => isAuto(itemLang(x))).slice(0, 2)) {
     const ft = await ensureFullText(env, it).catch(() => null);

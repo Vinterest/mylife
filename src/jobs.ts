@@ -1,4 +1,5 @@
 import type { Env } from './types';
+import { rebuildTabCounts } from './schema';
 import { processPendingCaptures } from './capture';
 import { autoTranslateAsian } from './asia';
 import { crawlSource, markDue, nextDueSource, rescoreCountries } from './crawl';
@@ -36,7 +37,9 @@ export async function tick(env: Env): Promise<string> {
   await step(notes, 'Dọn dẹp', async () => {
     // Mỗi ngày một lần, nhịp lúc 06:30–06:34 giờ VN.
     const m = vnMinutes();
-    return m >= 6 * 60 + 30 && m < 6 * 60 + 35 ? cleanupFullTexts(env) : '';
+    if (!(m >= 6 * 60 + 30 && m < 6 * 60 + 35)) return '';
+    // Kèm đếm lại số trên tab (sửa lệch nếu có) — quét cả bảng 1 lần mỗi ngày.
+    return `${await cleanupFullTexts(env)} · ${await rebuildTabCounts(env)}`;
   });
   // Crawl tối đa 3 nguồn đến hạn mỗi nhịp (37 nguồn ≈ 1 giờ), dừng sớm nếu đã chạy quá 25 giây.
   let crawled = 0;

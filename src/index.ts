@@ -21,6 +21,7 @@ import { APPLE_TOUCH_PNG_B64, ICON_192_PNG_B64, ICON_512_PNG_B64 } from './icon-
 import { appIconSvg, FAVICON_SVG } from './brand';
 import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
 import { ensureSchema } from './schema';
+import { withDbStats } from './dbstats';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -117,15 +118,12 @@ app.use('/hoc-tap*', async (c, next) => {
  * Sổ tay = mục nhặt đã lưu + bài đã lưu (trừ bài tạo từ Hộp nhặt, đã tính ở mục nhặt); Đã đọc = tổng bài đã đọc.
  */
 async function tabCounts(env: Env): Promise<Record<string, number>> {
-  const [ch, other] = await env.DB.batch([
-    env.DB.prepare(`SELECT channel, COUNT(*) AS total, SUM(CASE WHEN read_at IS NOT NULL THEN 1 ELSE 0 END) AS readN FROM items WHERE dismissed = 0 GROUP BY channel`),
-    env.DB.prepare(`SELECT (SELECT COUNT(*) FROM captures) AS inbox,
-      (SELECT COUNT(*) FROM captures WHERE kept = 1) + (SELECT COUNT(*) FROM items WHERE kept = 1 AND source_id <> 'manual') AS notes,
-      (SELECT COUNT(*) FROM items WHERE read_at IS NOT NULL) AS readn`),
-  ]);
-  const cnt: Record<string, number> = Object.fromEntries((ch.results as { channel: string; total: number; readN: number }[]).map((r) => [r.channel, Math.max(0, r.total - r.readN)]));
-  const o = (other.results[0] ?? {}) as { inbox?: number; notes?: number; readn?: number };
-  return { ...cnt, inbox: o.inbox ?? 0, notes: o.notes ?? 0, read: o.readn ?? 0 };
+  // Đọc từ bộ đếm giữ sẵn (bảng tab_counts, trigger tự cập nhật): ~10 dòng thay vì đếm lại cả bảng bài.
+  const { results } = await env.DB.prepare('SELECT k, n FROM tab_counts').all<{ k: string; n: number }>();
+  const m = Object.fromEntries(results.map((r) => [r.k, Math.max(0, r.n)]));
+  const cnt: Record<string, number> = {};
+  for (const [k, n] of Object.entries(m)) if (k.startsWith('unread:')) cnt[k.slice(7)] = n;
+  return { ...cnt, inbox: m.captures ?? 0, notes: (m.notes_items ?? 0) + (m.notes_caps ?? 0), read: m.read ?? 0 };
 }
 
 /** Chặn POST từ trang khác (chống CSRF đơn giản). */
@@ -175,7 +173,7 @@ app.get('/hoc-tap/kenh/:slug', async (c) => {
   const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
   const [rows, total] = await Promise.all([
     latestByChannel(c.env, ch, 21, (pageNo - 1) * 20, sort),
-    c.env.DB.prepare('SELECT COUNT(*) AS n FROM items WHERE channel = ? AND dismissed = 0 AND read_at IS NULL').bind(ch).first<{ n: number }>(),
+    c.env.DB.prepare(`SELECT n FROM tab_counts WHERE k = 'unread:' || ?`).bind(ch).first<{ n: number }>(),
   ]);
   return c.html(channelPage({ channel: ch, items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20, sort, total: total?.n ?? 0 }));
 });
@@ -250,7 +248,7 @@ app.get('/hoc-tap/tim', async (c) => {
 app.get('/hoc-tap/da-doc', async (c) => {
   const pageNo = Math.max(1, Number(c.req.query('trang')) || 1);
   const rows = await readItems(c.env, 21, (pageNo - 1) * 20);
-  const total = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM items WHERE read_at IS NOT NULL').first<{ n: number }>();
+  const total = await c.env.DB.prepare(`SELECT n FROM tab_counts WHERE k = 'read'`).first<{ n: number }>();
   return c.html(readPage({ items: rows.slice(0, 20), pageNo, hasMore: rows.length > 20, total: total?.n ?? 0 }));
 });
 
@@ -442,8 +440,12 @@ app.onError((err, c) => {
 
 /* ---------- Việc chạy nền: 1 cron mỗi 5 phút chạy một "nhịp" nhỏ (xem src/jobs.ts) ---------- */
 export default {
-  fetch: app.fetch,
+  async fetch(req: Request, env: Env, ctx: ExecutionContext) {
+    const st = withDbStats(env, `${req.method} ${new URL(req.url).pathname}`);
+    try { return await app.fetch(req, st.env, ctx); } finally { st.done(); }
+  },
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(ensureSchema(env).then(() => runJob(env, 'tick')));
+    const st = withDbStats(env, 'CRON tick');
+    ctx.waitUntil(ensureSchema(st.env).then(() => runJob(st.env, 'tick')).finally(st.done));
   },
 } satisfies ExportedHandler<Env>;

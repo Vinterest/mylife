@@ -7,6 +7,7 @@ import m5 from '../migrations/0005_sources_robotics.sql';
 import m6 from '../migrations/0006_captures.sql';
 import m7 from '../migrations/0007_sources_asia_finance.sql';
 import m8 from '../migrations/0008_reading_time.sql';
+import m9 from '../migrations/0009_read_budget.sql';
 
 /** Tách file SQL thành từng câu lệnh: bỏ chú thích "--", tách theo dấu ";" cuối câu. */
 export function splitSql(sql: string): string[] {
@@ -25,8 +26,18 @@ let ready = false;
  * Tự tạo bảng nếu chưa có (lần chạy đầu sau khi deploy). Các lệnh đều là
  * "CREATE ... IF NOT EXISTS" / "INSERT OR IGNORE" nên chạy lại cũng an toàn.
  */
+/** Tăng số này khi lược đồ / dữ liệu cần sửa một lần. Đã ở phiên bản này thì khởi động chỉ đọc 1 dòng. */
+const SCHEMA_VERSION = '9';
+
 export async function ensureSchema(env: Env): Promise<void> {
   if (ready) return;
+  const cur = await env.DB.prepare("SELECT v FROM meta WHERE k = 'schema'").first<{ v: string }>().catch(() => null);
+  if (cur?.v === SCHEMA_VERSION) { ready = true; return; }
+  await upgradeSchema(env);
+  ready = true;
+}
+
+async function upgradeSchema(env: Env): Promise<void> {
   const { results: tables } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('sources','items','daily_picks','quota_usage','jobs_log','fulltexts','captures','capture_images')").all<{ name: string }>();
   if (tables.length < 6) {
     for (const file of [m1, m2, m3, m4, m5, m6, m7]) {
@@ -81,5 +92,66 @@ export async function ensureSchema(env: Env): Promise<void> {
   if (!ids.has('rss-fn-sg')) await env.DB.batch(splitSql(m7).map((st) => env.DB.prepare(st)));
   // Sửa bài có ngày đăng ở tương lai (lỗi feed) — chúng chiếm đầu danh sách "Mới nhất".
   await env.DB.prepare('UPDATE items SET published_at = fetched_at WHERE published_at > fetched_at').run();
-  ready = true;
+  // Phiên bản 9: chỉ mục + bộ đếm tab + đánh dấu bài đã có toàn văn (attempts = 9).
+  await env.DB.batch(splitSql(m9).map((s) => env.DB.prepare(s)));
+  await env.DB.batch(TRIGGERS.map((s) => env.DB.prepare(s)));
+  await env.DB.prepare('UPDATE items SET attempts = 9 WHERE attempts < 9 AND id IN (SELECT item_id FROM fulltexts)').run();
+  await rebuildTabCounts(env);
+  await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('schema', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(SCHEMA_VERSION).run();
+}
+
+/*
+ * Bộ đếm tab (bảng tab_counts), cập nhật tự động khi bài / mục nhặt đổi trạng thái:
+ *   unread:<kênh> = bài chưa đọc, chưa "Không quan tâm" của kênh · read = tổng bài đã đọc
+ *   notes_items = bài đã Lưu Sổ tay (trừ bài tạo từ Hộp nhặt) · notes_caps = mục nhặt đã lưu · captures = tổng mục nhặt
+ */
+const unreadCh = (r: 'NEW' | 'OLD') => `${r}.dismissed = 0 AND ${r}.read_at IS NULL`;
+const noteIt = (r: 'NEW' | 'OLD') => `(${r}.kept = 1 AND ${r}.source_id <> 'manual')`;
+const TRIGGERS = [
+  `CREATE TRIGGER IF NOT EXISTS trg_items_ins AFTER INSERT ON items BEGIN
+     INSERT OR IGNORE INTO tab_counts (k, n) VALUES ('unread:' || NEW.channel, 0);
+     UPDATE tab_counts SET n = n + 1 WHERE k = 'unread:' || NEW.channel AND ${unreadCh('NEW')};
+     UPDATE tab_counts SET n = n + 1 WHERE k = 'read' AND NEW.read_at IS NOT NULL;
+     UPDATE tab_counts SET n = n + 1 WHERE k = 'notes_items' AND ${noteIt('NEW')};
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_items_del AFTER DELETE ON items BEGIN
+     UPDATE tab_counts SET n = n - 1 WHERE k = 'unread:' || OLD.channel AND ${unreadCh('OLD')};
+     UPDATE tab_counts SET n = n - 1 WHERE k = 'read' AND OLD.read_at IS NOT NULL;
+     UPDATE tab_counts SET n = n - 1 WHERE k = 'notes_items' AND ${noteIt('OLD')};
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_items_upd AFTER UPDATE OF channel, dismissed, read_at, kept, source_id ON items BEGIN
+     UPDATE tab_counts SET n = n - 1 WHERE k = 'unread:' || OLD.channel AND ${unreadCh('OLD')};
+     INSERT OR IGNORE INTO tab_counts (k, n) VALUES ('unread:' || NEW.channel, 0);
+     UPDATE tab_counts SET n = n + 1 WHERE k = 'unread:' || NEW.channel AND ${unreadCh('NEW')};
+     UPDATE tab_counts SET n = n + (NEW.read_at IS NOT NULL) - (OLD.read_at IS NOT NULL) WHERE k = 'read' AND (NEW.read_at IS NOT NULL) <> (OLD.read_at IS NOT NULL);
+     UPDATE tab_counts SET n = n + ${noteIt('NEW')} - ${noteIt('OLD')} WHERE k = 'notes_items' AND ${noteIt('NEW')} <> ${noteIt('OLD')};
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_caps_ins AFTER INSERT ON captures BEGIN
+     UPDATE tab_counts SET n = n + 1 WHERE k = 'captures';
+     UPDATE tab_counts SET n = n + 1 WHERE k = 'notes_caps' AND NEW.kept = 1;
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_caps_del AFTER DELETE ON captures BEGIN
+     UPDATE tab_counts SET n = n - 1 WHERE k = 'captures';
+     UPDATE tab_counts SET n = n - 1 WHERE k = 'notes_caps' AND OLD.kept = 1;
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_caps_upd AFTER UPDATE OF kept ON captures BEGIN
+     UPDATE tab_counts SET n = n + (NEW.kept = 1) - (OLD.kept = 1) WHERE k = 'notes_caps' AND (NEW.kept = 1) <> (OLD.kept = 1);
+   END`,
+  // Có toàn văn rồi thì rời hàng chờ lấy toàn văn (chỉ mục idx_items_ft_todo).
+  `CREATE TRIGGER IF NOT EXISTS trg_ft_ins AFTER INSERT ON fulltexts BEGIN
+     UPDATE items SET attempts = 9 WHERE id = NEW.item_id AND attempts < 9;
+   END`,
+];
+
+/** Đếm lại toàn bộ bộ đếm tab (lúc nâng phiên bản và mỗi ngày một lần để sửa lệch nếu có). Quét cả bảng 1 lần. */
+export async function rebuildTabCounts(env: Env): Promise<string> {
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM tab_counts'),
+    env.DB.prepare(`INSERT INTO tab_counts (k, n) SELECT 'unread:' || channel, SUM(dismissed = 0 AND read_at IS NULL) FROM items GROUP BY channel`),
+    env.DB.prepare(`INSERT INTO tab_counts (k, n) SELECT 'read', COUNT(*) FROM items WHERE read_at IS NOT NULL`),
+    env.DB.prepare(`INSERT INTO tab_counts (k, n) SELECT 'notes_items', COUNT(*) FROM items WHERE kept = 1 AND source_id <> 'manual'`),
+    env.DB.prepare(`INSERT INTO tab_counts (k, n) SELECT 'captures', COUNT(*) FROM captures`),
+    env.DB.prepare(`INSERT INTO tab_counts (k, n) SELECT 'notes_caps', COUNT(*) FROM captures WHERE kept = 1`),
+  ]);
+  return 'Đếm lại số trên tab';
 }
