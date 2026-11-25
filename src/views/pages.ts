@@ -56,7 +56,7 @@ function itemActions(it: ItemRow, back: string) {
 }
 
 function readRow(it: ItemRow, back: string) {
-  return html`<article class="rw">
+  return html`<article class="rw" data-row="${it.id}" data-tab="/hoc-tap/kenh/${CHANNELS[it.channel].slug}">
   ${thumb(it)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
     <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}${countryLabel(it)}</span>${thaiTag(it)}
@@ -85,7 +85,7 @@ export function homePage(p: { picks: ItemRow[]; sort: SortMode; byChannel: Recor
   <div class="colmain">
     <div class="sh"><h2>Đáng đọc · ${p.picks.length} bài</h2><span class="meta">72 giờ qua · cập nhật mỗi lần mở trang</span>${sortSwitch('/hoc-tap', p.sort)}</div>
     ${p.picks.length
-      ? p.picks.map((it) => readRow(it, '/hoc-tap'))
+      ? html`<div data-list="unread">${p.picks.map((it) => readRow(it, '/hoc-tap'))}</div>`
       : html`<div class="empty">Chưa có bài chưa đọc trong 72 giờ qua. Nếu vừa cài đặt, vào <a href="/hoc-tap/han-muc" style="color:var(--ac)">Nguồn &amp; hạn mức</a> và bấm “Crawl lại tất cả RSS”.</div>`}
   </div>
   <aside class="colside">
@@ -135,7 +135,7 @@ export function channelPage(p: { channel: keyof typeof CHANNELS; items: ItemRow[
 <section class="cols">
   <div class="colmain">
     <div class="sh one"><h2>${ch.name}</h2>${sortSwitch(`/hoc-tap/kenh/${ch.slug}`, p.sort, def)}</div>
-    ${p.items.length ? p.items.map((it) => readRow(it, back)) : html`<div class="empty">Chưa có bài trong kênh này.</div>`}
+    ${p.items.length ? html`<div data-list="unread">${p.items.map((it) => readRow(it, back))}</div>` : html`<div class="empty">Chưa có bài trong kênh này.</div>`}
     ${pager(`/hoc-tap/kenh/${ch.slug}${p.sort === def ? '' : `?xep=${p.sort}`}`, p.pageNo, Math.ceil(p.total / PER_PAGE), p.total, 'bài chưa đọc')}
   </div>
 </section>`;
@@ -149,7 +149,7 @@ export function readPage(p: { items: ItemRow[]; pageNo: number; hasMore: boolean
   <div class="colmain">
     <div class="sh"><h2>Đã đọc · ${p.total} bài</h2><span class="meta">mới đọc trước · bấm “↩ Chưa đọc” để đưa bài về danh sách</span></div>
     ${p.items.length
-      ? p.items.map((it) => html`<div class="rdmark">Đọc xong ${timeAgoVi(it.read_at!)}</div>${readRow(it, back)}`)
+      ? html`<div data-list="read">${p.items.map((it) => html`<div data-row="${it.id}" data-tab="/hoc-tap/kenh/${CHANNELS[it.channel].slug}"><div class="rdmark">Đọc xong ${timeAgoVi(it.read_at!)}</div>${readRow(it, back)}</div>`)}</div>`
       : html`<div class="empty">Chưa có bài nào. Bấm “✓ Đã đọc” ở mỗi bài khi anh đọc hoặc review xong, bài sẽ chuyển vào đây.</div>`}
     ${pager('/hoc-tap/da-doc', p.pageNo, Math.ceil(p.total / PER_PAGE), p.total)}
   </div>

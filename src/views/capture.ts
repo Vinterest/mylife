@@ -66,7 +66,7 @@ function capStatus(c: CaptureRow) {
 function capRow(c: CaptureRow, back: string) {
   const nImg = c.img_ids ? c.img_ids.split(',').length : 0;
   const text = c.note || c.ocr_preview?.replace(/^\[[^\]]*\]\s*/, '') || c.description || '';
-  return html`<article class="cc">
+  return html`<article class="cc" data-row="c${c.id}">
   ${capThumb(c)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
     <div style="display:flex;gap:.5em;flex-wrap:wrap;align-items:center"><span class="kick">${chName(c.channel)}</span>${capStatus(c)}${c.kept ? html`<span class="st ok">Sổ tay</span>` : ''}</div>
@@ -207,7 +207,7 @@ export function notebookPage(p: { captures: CaptureRow[]; items: ItemRow[]; page
 <section class="cols">
   <div class="colmain">
     <div class="sh"><h2>Sổ tay · ${entries.length} mục</h2><span class="meta">mới lưu lên đầu · lưu vĩnh viễn</span></div>
-    ${entries.length ? shown.map((e) => e.html) : html`<div class="empty">Sổ tay trống. Bấm “Lưu Sổ tay” ở bài báo hoặc mục nhặt để lưu vĩnh viễn.</div>`}
+    ${entries.length ? html`<div data-list="notes">${shown.map((e) => e.html)}</div>` : html`<div class="empty">Sổ tay trống. Bấm “Lưu Sổ tay” ở bài báo hoặc mục nhặt để lưu vĩnh viễn.</div>`}
     ${pager('/hoc-tap/so-tay', pageNo, Math.ceil(entries.length / NOTE_PER_PAGE), entries.length, 'mục')}
   </div>
 </section>`;

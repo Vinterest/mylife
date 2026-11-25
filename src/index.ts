@@ -93,26 +93,14 @@ app.use('*', async (c, next) => {
  * Trang chỉ để chỗ <!--cnt:kênh-->, ở đây điền số bằng 1 truy vấn cho cả 4 kênh.
  */
 app.use('/hoc-tap*', async (c, next) => {
+  // Đếm song song với lúc dựng trang (1 lượt gọi D1 cho cả 4 con số), thay vì chạy tuần tự sau khi dựng xong.
+  const wantCounts = c.req.method === 'GET' && !/^\/hoc-tap\/(anh|thumb)\//.test(c.req.path);
+  const countsP = wantCounts ? tabCounts(c.env).catch(() => null) : null;
   await next();
-  if (c.req.method !== 'GET' || !c.res.headers.get('Content-Type')?.includes('text/html')) return;
+  if (!countsP || !c.res.headers.get('Content-Type')?.includes('text/html')) return;
   const body = await c.res.text();
   if (!body.includes('<!--cnt:')) { c.res = new Response(body, c.res); return; }
-  // Số hiện = TỔNG số bài của kênh cộng dồn từ trước tới nay − số bài anh đã bấm Đã đọc (không reset theo ngày).
-  // Bài "Không quan tâm" không tính. Bài mới về thì số tăng, đọc bài nào thì số giảm bài đó.
-  const { results } = await c.env.DB.prepare(
-    `SELECT channel, COUNT(*) AS total, SUM(CASE WHEN read_at IS NOT NULL THEN 1 ELSE 0 END) AS readN
-     FROM items WHERE dismissed = 0 GROUP BY channel`
-  ).all<{ channel: string; total: number; readN: number }>();
-  const cnt: Record<string, number> = Object.fromEntries(results.map((r) => [r.channel, Math.max(0, r.total - r.readN)]));
-  const inbox = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM captures').first<{ n: number }>().catch(() => null);
-  cnt.inbox = inbox?.n ?? 0;
-  // Sổ tay = mục nhặt đã lưu + bài đã Lưu Sổ tay (không tính bài tạo từ Hộp nhặt, vì đã tính ở mục nhặt) — giống trang Sổ tay.
-  const notes = await c.env.DB.prepare(
-    `SELECT (SELECT COUNT(*) FROM captures WHERE kept = 1) + (SELECT COUNT(*) FROM items WHERE kept = 1 AND source_id <> 'manual') AS n`
-  ).first<{ n: number }>().catch(() => null);
-  cnt.notes = notes?.n ?? 0;
-  const read = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM items WHERE read_at IS NOT NULL').first<{ n: number }>().catch(() => null);
-  cnt.read = read?.n ?? 0;
+  const cnt = (await countsP) ?? {};
   const out = body.replace(/<!--cnt:([a-z]+)-->/g, (_, ch: string) => {
     const n = cnt[ch] ?? 0;
     const tip = ch === 'inbox' ? 'Tổng số mục trong Hộp nhặt' : ch === 'notes' ? 'Số mục trong Sổ tay' : ch === 'read' ? 'Tổng số bài đã đọc' : 'Tổng số bài của kênh trừ số bài đã đọc';
@@ -122,6 +110,23 @@ app.use('/hoc-tap*', async (c, next) => {
   headers.delete('Content-Length');
   c.res = new Response(out, { status: c.res.status, headers });
 });
+
+/**
+ * Số cạnh tên tab, trong MỘT lượt gọi D1 (batch):
+ * kênh = tổng bài của kênh − bài đã đọc (không tính bài "Không quan tâm"); Hộp nhặt = tổng mục;
+ * Sổ tay = mục nhặt đã lưu + bài đã lưu (trừ bài tạo từ Hộp nhặt, đã tính ở mục nhặt); Đã đọc = tổng bài đã đọc.
+ */
+async function tabCounts(env: Env): Promise<Record<string, number>> {
+  const [ch, other] = await env.DB.batch([
+    env.DB.prepare(`SELECT channel, COUNT(*) AS total, SUM(CASE WHEN read_at IS NOT NULL THEN 1 ELSE 0 END) AS readN FROM items WHERE dismissed = 0 GROUP BY channel`),
+    env.DB.prepare(`SELECT (SELECT COUNT(*) FROM captures) AS inbox,
+      (SELECT COUNT(*) FROM captures WHERE kept = 1) + (SELECT COUNT(*) FROM items WHERE kept = 1 AND source_id <> 'manual') AS notes,
+      (SELECT COUNT(*) FROM items WHERE read_at IS NOT NULL) AS readn`),
+  ]);
+  const cnt: Record<string, number> = Object.fromEntries((ch.results as { channel: string; total: number; readN: number }[]).map((r) => [r.channel, Math.max(0, r.total - r.readN)]));
+  const o = (other.results[0] ?? {}) as { inbox?: number; notes?: number; readn?: number };
+  return { ...cnt, inbox: o.inbox ?? 0, notes: o.notes ?? 0, read: o.readn ?? 0 };
+}
 
 /** Chặn POST từ trang khác (chống CSRF đơn giản). */
 function sameOrigin(c: { req: { header: (n: string) => string | undefined; url: string } }) {
@@ -229,6 +234,7 @@ app.post('/hoc-tap/bai/:id/:action{giu|bo|da-doc}', async (c) => {
   if (action === 'giu') await setKept(c.env, 'item', id, form.want === undefined ? undefined : form.want === '1');
   else if (action === 'da-doc') await c.env.DB.prepare('UPDATE items SET read_at = CASE WHEN read_at IS NULL THEN ? ELSE NULL END WHERE id = ?').bind(new Date().toISOString(), id).run();
   else await c.env.DB.prepare('UPDATE items SET dismissed = 1 WHERE id = ?').bind(id).run();
+  if (c.req.header('X-Ajax')) return c.body(null, 204); // nút bấm kiểu mới: trang tự cập nhật, không tải lại
   const back = String(form.back ?? '/hoc-tap');
   return c.redirect(back.startsWith('/') ? back : '/hoc-tap', 303);
 });
@@ -329,7 +335,10 @@ app.post('/hoc-tap/hop-nhat/:id{[0-9]+}/:action{so-tay|xoa|xu-ly-lai}', async (c
   const body = await c.req.parseBody();
   const back = String(body.back ?? `/hoc-tap/hop-nhat/${id}`);
   const go = (u: string) => c.redirect(u.startsWith('/') ? u : '/hoc-tap/hop-nhat', 303);
-  if (action === 'so-tay') await setKept(c.env, 'capture', id, body.want === undefined ? undefined : body.want === '1');
+  if (action === 'so-tay') {
+    await setKept(c.env, 'capture', id, body.want === undefined ? undefined : body.want === '1');
+    if (c.req.header('X-Ajax')) return c.body(null, 204);
+  }
   if (action === 'ghi-chu') {
     await c.env.DB.prepare('UPDATE captures SET note = ? WHERE id = ?').bind(String(body.note ?? '').trim().slice(0, 30000) || null, id).run();
     return go(`/hoc-tap/hop-nhat/${id}`);
