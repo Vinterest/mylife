@@ -69,7 +69,11 @@ function flush(){timer=0;if(busy||!queue.length)return;var rows=queue.splice(0,2
     var p=row.querySelector('.sum');if(p&&x.s){p.textContent=x.s;p.setAttribute('lang','vi')}
     var tag=row.querySelector('.thtag');if(!tag){tag=document.createElement('span');var k=row.querySelector('.kick');if(k)k.after(tag)}if(tag){tag.className='thtag';tag.textContent=x.tag}})})
   .catch(function(){rows.forEach(function(r){r.setAttribute('data-tr','1')})}).then(function(){busy=false;if(queue.length)timer=setTimeout(flush,50)})}
-var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting&&e.target.getAttribute('data-tr')==='1'){e.target.setAttribute('data-tr','2');io.unobserve(e.target);queue.push(e.target)}});if(queue.length&&!timer)timer=setTimeout(flush,120)},{rootMargin:'400px 0px'});
-function scan(){document.querySelectorAll('[data-tr="1"]').forEach(function(r){io.observe(r)})}
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting&&e.target.getAttribute('data-tr')==='1')take(e.target)});if(queue.length&&!timer)timer=setTimeout(flush,120)},{rootMargin:'400px 0px'});
+function take(r){r.setAttribute('data-tr','2');io.unobserve(r);queue.push(r)}
+// Dự phòng khi trình duyệt không báo IntersectionObserver (tab nền, khung nhúng…): tự đo vị trí các dòng.
+function sweep(){var h=innerHeight;document.querySelectorAll('[data-tr="1"]').forEach(function(r){var b=r.getBoundingClientRect();if(b.bottom>-400&&b.top<h+400)take(r)});if(queue.length&&!timer)timer=setTimeout(flush,120)}
+function scan(){document.querySelectorAll('[data-tr="1"]').forEach(function(r){io.observe(r)});setTimeout(sweep,1500)}
+var st=0;addEventListener('scroll',function(){if(!st)st=setTimeout(function(){st=0;sweep()},300)},{passive:true});
 window.mlScanTitles=scan;scan();
 })()`;
