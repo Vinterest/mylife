@@ -6,6 +6,7 @@ import { COUNTRY_NAME, type Country } from '../country';
 import type { quotaSnapshot } from '../ai/quota';
 import type { SortMode } from '../db';
 import { capName, isAuto, itemLang, LANG_NAME } from '../lang';
+import { EN_PER_DAY } from '../asia';
 
 type Quota = Awaited<ReturnType<typeof quotaSnapshot>>;
 
@@ -15,6 +16,8 @@ const tl = (it: ItemRow) => (it.title_vi ? 'vi' : itemLang(it));
 /** Nhãn cho bài tiếng châu Á (Thái, Indonesia, Hàn, Nhật, Trung…) tự dịch. */
 export const thaiTag = (it: ItemRow) => {
   const l = itemLang(it);
+  // Bài tiếng Anh của nguồn bật "Dịch mặc định": nhãn khi đã dịch sẵn tiêu đề (chưa tới lượt thì để tiếng Anh, không gắn nhãn).
+  if (l === 'en') return it.title_vi ? html`<span class="thtag">Dịch từ tiếng Anh</span>` : '';
   if (!isAuto(l)) return '';
   return it.title_vi ? html`<span class="thtag">Dịch từ ${LANG_NAME[l]}</span>` : html`<span class="thtag wait">${capName(l)} · chưa dịch</span>`;
 };
@@ -34,7 +37,7 @@ function sortSwitch(base: string, sort: SortMode, def: SortMode = 'moi') {
 
 function snippet(it: ItemRow) {
   // Bài tiếng châu Á: hiện đoạn mô tả đã dịch (lưu ở summary_vi).
-  const src = it.summary_vi && isAuto(itemLang(it)) ? it.summary_vi : it.abstract_en ?? '';
+  const src = it.summary_vi && itemLang(it) !== 'vi' ? it.summary_vi : it.abstract_en ?? '';
   const a = src.slice(0, 240);
   return a ? `${a}${src.length > 240 ? '…' : ''}` : '';
 }
@@ -61,7 +64,7 @@ function readRow(it: ItemRow, back: string) {
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
     <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}${countryLabel(it)}</span>${thaiTag(it)}
     <a class="t2" href="/hoc-tap/bai/${it.id}" lang="${tl(it)}">${newBadge(it)}${title(it)}</a>
-    <p class="sum" lang="${it.summary_vi && isAuto(itemLang(it)) ? 'vi' : itemLang(it)}">${snippet(it)}</p>
+    <p class="sum" lang="${it.summary_vi && itemLang(it) !== 'vi' ? 'vi' : itemLang(it)}">${snippet(it)}</p>
     ${itemActions(it, back)}
   </div>
 </article>`;
@@ -171,10 +174,14 @@ ${lateMin > 20
     <div class="scroll"><table class="tbl"><thead><tr><th>Dịch vụ</th><th>Kỳ</th><th>Đã dùng</th><th>Hạn mức</th><th>%</th></tr></thead><tbody>
     ${p.quota.map((x) => html`<tr><td>${x.label}</td><td>${x.scope}</td><td>${x.used.toLocaleString('vi-VN')} ${x.unit}</td><td>${x.limit.toLocaleString('vi-VN')}</td><td>${x.pct}%</td></tr>`)}
     </tbody></table></div>
-    <div class="sh" style="margin-top:1.6em"><h2>Nguồn · ${p.sources.length}</h2><span class="meta">bật/tắt trong bảng sources (D1)</span></div>
-    <div class="scroll"><table class="tbl"><thead><tr><th>Nguồn</th><th>Kênh</th><th>Loại</th><th>Lần chạy</th><th>Trạng thái</th><th>Bài</th></tr></thead><tbody>
+    <div class="sh" id="nguon" style="margin-top:1.6em"><h2>Nguồn · ${p.sources.length}</h2><span class="meta">Dịch mặc định Anh → Việt: ${p.sources.filter((s) => s.auto_vi && s.id !== 'manual').length}/${p.sources.filter((s) => s.id !== 'manual').length} nguồn</span></div>
+    <div class="box" style="margin-bottom:.8em;display:flex;flex-direction:row;gap:.8em;align-items:center;flex-wrap:wrap">
+      <span class="meta" style="flex:1 1 320px;line-height:1.55"><b style="color:var(--ink)">Dịch mặc định Anh → Việt</b> — bài tiếng Anh của nguồn đang bật: tiêu đề và tóm tắt được dịch sẵn khi về MyLife (tối đa ${EN_PER_DAY} bài/ngày, ưu tiên điểm cao), mở bài là tự dịch toàn văn. Nguồn tắt: chỉ dịch khi anh bấm “Dịch bài này”. Bài tiếng Việt không dịch; bài tiếng Thái, Indonesia, Hàn… luôn tự dịch như cũ.</span>
+      <span style="display:flex;gap:.5em"><form method="post" action="/hoc-tap/nguon/dich-tat-ca"><input type="hidden" name="want" value="1"><button class="btn2" type="submit">Bật tất cả</button></form><form method="post" action="/hoc-tap/nguon/dich-tat-ca"><input type="hidden" name="want" value="0"><button class="btn2" type="submit">Tắt tất cả</button></form></span>
+    </div>
+    <div class="scroll"><table class="tbl"><thead><tr><th>Nguồn</th><th>Dịch mặc định</th><th>Kênh</th><th>Loại</th><th>Lần chạy</th><th>Trạng thái</th><th>Bài</th></tr></thead><tbody>
     ${p.sources.map(
-      (s) => html`<tr><td>${s.name}${s.enabled ? '' : html` <span class="st err">tắt</span>`}</td><td>${CHANNELS[s.channel].short}</td><td>${s.kind}</td><td class="meta">${s.last_run_at ? timeAgoVi(s.last_run_at) : 'chưa chạy'}</td><td>${s.last_error ? html`<span class="st err" title="${s.last_error}">${s.last_error.slice(0, 40)}</span>` : s.last_run_at ? html`<span class="st ok">OK</span>` : '—'}</td><td>${s.item_count}</td></tr>`
+      (s) => html`<tr><td>${s.name}${s.enabled ? '' : html` <span class="st err">tắt</span>`}</td><td>${s.id === 'manual' ? html`<span class="meta">—</span>` : html`<form method="post" action="/hoc-tap/nguon/${s.id}/dich"><input type="hidden" name="want" value="${s.auto_vi ? 0 : 1}"><button type="submit" class="tgl${s.auto_vi ? ' on' : ''}" aria-pressed="${s.auto_vi ? 'true' : 'false'}" title="${s.auto_vi ? 'Đang bật — bấm để tắt' : 'Đang tắt — bấm để bật'}"><span></span>${s.auto_vi ? 'Bật' : 'Tắt'}</button></form>`}</td><td>${CHANNELS[s.channel].short}</td><td>${s.kind}</td><td class="meta">${s.last_run_at ? timeAgoVi(s.last_run_at) : 'chưa chạy'}</td><td>${s.last_error ? html`<span class="st err" title="${s.last_error}">${s.last_error.slice(0, 40)}</span>` : s.last_run_at ? html`<span class="st ok">OK</span>` : '—'}</td><td>${s.item_count}</td></tr>`
     )}
     </tbody></table></div>
   </div>

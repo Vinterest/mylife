@@ -99,6 +99,11 @@ form.inline{display:inline}
 .scroll{overflow-x:auto}
 .empty{padding:1.2em;border:1px dashed #C9D1DA;border-radius:6px;color:var(--mut)}
 .pager{display:flex;gap:1em;justify-content:space-between;padding-top:1em}
+/* Công tắc bật/tắt (Dịch mặc định theo nguồn) */
+.tgl{display:inline-flex;align-items:center;gap:.45em;border:0;background:none;padding:.2em 0;font:inherit;font-size:.9em;color:var(--mut);cursor:pointer;white-space:nowrap}
+.tgl span{position:relative;width:34px;height:20px;border-radius:10px;background:#C9D1DA;transition:background .15s;flex:none}
+.tgl span::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.tgl.on{color:var(--ink);font-weight:600}.tgl.on span{background:var(--ac)}.tgl.on span::after{left:16px}
 /* Thanh phân trang có số: vừa một hàng trên iPhone (tối đa 9 ô) */
 .pgn{display:flex;flex-direction:column;align-items:center;gap:.45em;padding:1.4em 0 .6em}
 .pgn ol{list-style:none;display:flex;flex-wrap:nowrap;gap:4px;margin:0;padding:0}
@@ -164,7 +169,7 @@ export function page(opts: { title: string; tab: string; sub?: H; body: H; badge
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/app.css?v=19">
+<link rel="stylesheet" href="/app.css?v=20">
 ${opts.track ? html`<meta name="ml-ref" content="${opts.track}">` : ''}
 <title>${opts.title} · MyLife</title>
 </head>

@@ -13,6 +13,12 @@ import { vnDay } from './util';
  */
 
 export const AUTO_PER_DAY = 10;
+/**
+ * Bài tiếng Anh của các nguồn bật "Dịch mặc định Anh → Việt" (trang Nguồn & hạn mức): dịch sẵn tiêu đề + tóm tắt,
+ * tối đa 60 bài/ngày (ưu tiên điểm cao), 10 bài mỗi nhịp — giữ hạn mức miễn phí. Toàn văn dịch khi anh mở bài.
+ */
+export const EN_PER_DAY = 60;
+const EN_PER_TICK = 10;
 /** Dòng đếm trong quota_usage, kỳ = ngày VN. Tiếng Thái giữ tên cũ để không đếm lại từ đầu. */
 const counterOf = (l: Lang) => (l === 'th' ? 'thai_auto' : `auto_${l}`);
 
@@ -37,13 +43,21 @@ export async function autoTranslateAsian(env: Env): Promise<string> {
     `SELECT i.* FROM items i INDEXED BY idx_items_fetched WHERE i.fetched_at >= ?1 AND i.dismissed = 0 AND i.title_vi IS NULL
      ORDER BY i.published_at DESC LIMIT 300`
   ).bind(startOfVnDay()).all<ItemRow>();
+  const { results: srcRows } = await env.DB.prepare('SELECT id FROM sources WHERE auto_vi = 1').all<{ id: string }>();
+  const autoSrc = new Set(srcRows.map((r) => r.id));
   const groups = new Map<Lang, ItemRow[]>();
+  const en: ItemRow[] = [];
   for (const it of results) {
     const l = itemLang(it);
+    if (l === 'en' && autoSrc.has(it.source_id)) { en.push(it); continue; }
     if (!isAuto(l)) continue;
     const g = groups.get(l) ?? [];
     if (g.length < AUTO_PER_DAY - doneOf(l)) groups.set(l, [...g, it]);
   }
+
+  // Tiếng Anh: bài điểm cao trước, còn suất trong ngày.
+  const enRoom = Math.min(EN_PER_TICK, EN_PER_DAY - doneOf('en'));
+  if (enRoom > 0 && en.length) groups.set('en', en.sort((a, b) => b.score - a.score).slice(0, enRoom));
 
   for (const [l, picks] of groups) {
     if (!picks.length) continue;
@@ -56,7 +70,7 @@ export async function autoTranslateAsian(env: Env): Promise<string> {
         ),
         env.DB.prepare(`INSERT INTO quota_usage (provider, period, used) VALUES (?, ?, ?) ON CONFLICT(provider, period) DO UPDATE SET used = used + excluded.used`).bind(counterOf(l), day, picks.length),
       ]);
-      notes.push(`${capName(l)}: dịch tiêu đề ${picks.length} bài (${doneOf(l) + picks.length}/${AUTO_PER_DAY} hôm nay)`);
+      notes.push(`${capName(l)}: dịch tiêu đề ${picks.length} bài (${doneOf(l) + picks.length}/${l === 'en' ? EN_PER_DAY : AUTO_PER_DAY} hôm nay)`);
     } catch (e) {
       if (e instanceof QuotaExhausted) { notes.push('Tự dịch: các dịch vụ đã tới 95% hạn mức — chờ kỳ mới'); return notes.join('\n'); }
       if (e instanceof RateLimited) { notes.push(`${capName(l)}: dịch vụ đang bận, thử lại nhịp sau`); continue; }

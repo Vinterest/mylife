@@ -36,6 +36,7 @@ export interface SourceRow {
   last_run_at: string | null;
   last_error: string | null;
   item_count: number;
+  auto_vi?: number; // 1 = dịch mặc định Anh → Việt (tiêu đề/tóm tắt khi crawl về, toàn văn khi mở bài)
 }
 
 export interface ItemRow {
@@ -66,6 +67,7 @@ export interface ItemRow {
   country?: string | null; // nước ưu tiên của bài (US, CN, TH…), "other", "" hoặc NULL (chưa chấm)
   dismissed: number;
   source_name?: string;
+  source_auto_vi?: number;
   source_weight?: number;
 }
 

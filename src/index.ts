@@ -21,6 +21,7 @@ import { APPLE_TOUCH_PNG_B64, ICON_192_PNG_B64, ICON_512_PNG_B64 } from './icon-
 import { appIconSvg, FAVICON_SVG } from './brand';
 import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
 import { ensureSchema } from './schema';
+import { itemLang } from './lang';
 import { withDbStats } from './dbstats';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -186,10 +187,18 @@ app.get('/hoc-tap/bai/:id', async (c) => {
     const cap = await c.env.DB.prepare('SELECT id FROM captures WHERE item_id = ? ORDER BY id DESC LIMIT 1').bind(it.id).first<{ id: number }>();
     if (cap) return c.redirect(`/hoc-tap/hop-nhat/${cap.id}`, 302);
   }
-  // Mở bài → lấy toàn văn nếu chưa có. KHÔNG tự dịch: anh bấm "Dịch bài này" khi cần.
-  const ft = await ensureFullText(c.env, it, 0);
+  // Mở bài → lấy toàn văn nếu chưa có.
+  let ft = await ensureFullText(c.env, it, 0);
   if (!ft) return c.text('Không đọc được toàn văn', 500);
-  const v = viewOf(ft);
+  let v = viewOf(ft);
+  // Nguồn bật "Dịch mặc định Anh → Việt": bài tiếng Anh tự dịch toàn văn ngay khi mở (như bấm "Dịch bài này").
+  // Nguồn tắt chế độ này: chỉ dịch khi anh bấm nút, để tiết kiệm hạn mức.
+  if (it.source_auto_vi && itemLang(it) === 'en' && !ft.priority && ft.status !== 'waiting_quota' && v.translatableCount > 0 && v.translatedCount < v.translatableCount) {
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(`UPDATE fulltexts SET priority = 1, error = NULL, translated_at = ? WHERE item_id = ?`).bind(now, it.id).run();
+    ft = { ...ft, priority: 1, translated_at: now };
+    v = viewOf(ft);
+  }
   const q = c.req.query('lang');
   const lang: Lang = q === 'en' || q === 'bi' || q === 'vi' ? q : v.translatedCount > 0 ? 'vi' : 'en';
   return c.html(readerPage(it, v, lang));
@@ -404,6 +413,20 @@ app.post('/api/nhat', async (c) => {
 });
 
 app.get('/sap-co/:key', (c) => c.html(soonPage(c.req.param('key'))));
+
+// Bật/tắt "Dịch mặc định Anh → Việt" cho một nguồn, hoặc cho tất cả nguồn.
+app.post('/hoc-tap/nguon/:id/dich', async (c) => {
+  if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
+  const want = String((await c.req.parseBody()).want ?? '1') === '1' ? 1 : 0;
+  await c.env.DB.prepare('UPDATE sources SET auto_vi = ? WHERE id = ?').bind(want, c.req.param('id')).run();
+  return c.redirect('/hoc-tap/han-muc#nguon', 303);
+});
+app.post('/hoc-tap/nguon/dich-tat-ca', async (c) => {
+  if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);
+  const want = String((await c.req.parseBody()).want ?? '1') === '1' ? 1 : 0;
+  await c.env.DB.prepare('UPDATE sources SET auto_vi = ?').bind(want).run();
+  return c.redirect('/hoc-tap/han-muc#nguon', 303);
+});
 
 app.post('/admin/run/:job', async (c) => {
   if (!sameOrigin(c)) return c.text('Yêu cầu không hợp lệ', 400);

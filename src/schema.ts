@@ -27,7 +27,7 @@ let ready = false;
  * "CREATE ... IF NOT EXISTS" / "INSERT OR IGNORE" nên chạy lại cũng an toàn.
  */
 /** Tăng số này khi lược đồ / dữ liệu cần sửa một lần. Đã ở phiên bản này thì khởi động chỉ đọc 1 dòng. */
-const SCHEMA_VERSION = '9';
+const SCHEMA_VERSION = '10';
 
 export async function ensureSchema(env: Env): Promise<void> {
   if (ready) return;
@@ -97,6 +97,12 @@ async function upgradeSchema(env: Env): Promise<void> {
   await env.DB.batch(TRIGGERS.map((s) => env.DB.prepare(s)));
   await env.DB.prepare('UPDATE items SET attempts = 9 WHERE attempts < 9 AND id IN (SELECT item_id FROM fulltexts)').run();
   await rebuildTabCounts(env);
+  // Phiên bản 10: chế độ "Dịch mặc định Anh → Việt" theo từng nguồn, bật sẵn cho mọi nguồn.
+  const hasAuto = await env.DB.prepare("SELECT 1 AS x FROM pragma_table_info('sources') WHERE name = 'auto_vi'").first();
+  if (!hasAuto) await env.DB.batch([
+    env.DB.prepare('ALTER TABLE sources ADD COLUMN auto_vi INTEGER NOT NULL DEFAULT 0'),
+    env.DB.prepare('UPDATE sources SET auto_vi = 1'),
+  ]);
   await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('schema', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v").bind(SCHEMA_VERSION).run();
 }
 

@@ -1,6 +1,6 @@
 import type { Channel, Env, ItemRow, SourceRow } from './types';
 
-const ITEM_COLS = `i.*, s.name AS source_name, s.weight AS source_weight`;
+const ITEM_COLS = `i.*, s.name AS source_name, s.weight AS source_weight, s.auto_vi AS source_auto_vi`;
 
 export type SortMode = 'moi' | 'diem';
 const ORDER: Record<SortMode, string> = { moi: 'i.published_at DESC, i.id DESC', diem: 'i.score DESC, i.published_at DESC' };
