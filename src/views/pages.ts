@@ -1,12 +1,12 @@
 import { isJunkImage } from '../fulltext/extract';
 import type { ItemRow, SourceRow } from '../types';
 import { CHANNELS, CHANNEL_ORDER, timeAgoVi } from '../util';
-import { g2Sub, html, page, pager } from './layout';
+import { g2Sub, html, page, pager, raw } from './layout';
 import { COUNTRY_NAME, type Country } from '../country';
 import type { quotaSnapshot } from '../ai/quota';
 import type { SortMode } from '../db';
 import { capName, isAuto, itemLang, LANG_NAME } from '../lang';
-import { EN_PER_DAY } from '../asia';
+import { needsTitleVi } from '../asia';
 
 type Quota = Awaited<ReturnType<typeof quotaSnapshot>>;
 
@@ -59,7 +59,7 @@ function itemActions(it: ItemRow, back: string) {
 }
 
 function readRow(it: ItemRow, back: string) {
-  return html`<article class="rw" data-row="${it.id}" data-tab="/hoc-tap/kenh/${CHANNELS[it.channel].slug}">
+  return html`<article class="rw" data-row="${it.id}" data-tab="/hoc-tap/kenh/${CHANNELS[it.channel].slug}"${needsTitleVi(it) ? raw(' data-tr="1"') : ''}>
   ${thumb(it)}
   <div style="display:flex;flex-direction:column;gap:.3em;min-width:0;flex:1">
     <span class="kick">${CHANNELS[it.channel].name} · Điểm ${it.score}${countryLabel(it)}</span>${thaiTag(it)}
@@ -176,7 +176,7 @@ ${lateMin > 20
     </tbody></table></div>
     <div class="sh" id="nguon" style="margin-top:1.6em"><h2>Nguồn · ${p.sources.length}</h2><span class="meta">Dịch mặc định Anh → Việt: ${p.sources.filter((s) => s.auto_vi && s.id !== 'manual').length}/${p.sources.filter((s) => s.id !== 'manual').length} nguồn</span></div>
     <div class="box" style="margin-bottom:.8em;display:flex;flex-direction:row;gap:.8em;align-items:center;flex-wrap:wrap">
-      <span class="meta" style="flex:1 1 320px;line-height:1.55"><b style="color:var(--ink)">Dịch mặc định Anh → Việt</b> — bài tiếng Anh của nguồn đang bật: tiêu đề và tóm tắt được dịch sẵn khi về MyLife (tối đa ${EN_PER_DAY} bài/ngày, ưu tiên điểm cao), mở bài là tự dịch toàn văn. Nguồn tắt: chỉ dịch khi anh bấm “Dịch bài này”. Bài tiếng Việt không dịch; bài tiếng Thái, Indonesia, Hàn… luôn tự dịch như cũ.</span>
+      <span class="meta" style="flex:1 1 320px;line-height:1.55"><b style="color:var(--ink)">Dịch mặc định Anh → Việt</b> — bài tiếng Anh của nguồn đang bật được dịch theo nhu cầu đọc: tiêu đề + tóm tắt dịch khi bài hiện trên màn hình (chỉ trang anh mở), trang Hôm nay dịch sẵn mỗi giờ đúng bằng số bài anh đọc trung bình/ngày, mở bài là tự dịch toàn văn. Nguồn tắt: chỉ dịch khi anh bấm “Dịch bài này”. Bài tiếng Việt không dịch; bài tiếng Thái, Indonesia, Hàn… luôn tự dịch như cũ.</span>
       <span style="display:flex;gap:.5em"><form method="post" action="/hoc-tap/nguon/dich-tat-ca"><input type="hidden" name="want" value="1"><button class="btn2" type="submit">Bật tất cả</button></form><form method="post" action="/hoc-tap/nguon/dich-tat-ca"><input type="hidden" name="want" value="0"><button class="btn2" type="submit">Tắt tất cả</button></form></span>
     </div>
     <div class="scroll"><table class="tbl"><thead><tr><th>Nguồn</th><th>Dịch mặc định</th><th>Kênh</th><th>Loại</th><th>Lần chạy</th><th>Trạng thái</th><th>Bài</th></tr></thead><tbody>

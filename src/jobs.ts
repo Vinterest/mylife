@@ -1,7 +1,7 @@
 import type { Env } from './types';
 import { rebuildTabCounts } from './schema';
 import { processPendingCaptures } from './capture';
-import { autoTranslateAsian } from './asia';
+import { autoTranslateAsian, pretranslateToday } from './asia';
 import { crawlSource, markDue, nextDueSource, rescoreCountries } from './crawl';
 import { cleanupFullTexts, fetchNextFullText, translateRequested } from './fulltext';
 
@@ -53,6 +53,7 @@ export async function tick(env: Env): Promise<string> {
   await step(notes, 'Ưu tiên quốc gia', () => rescoreCountries(env));
   await step(notes, 'Hộp nhặt', () => processPendingCaptures(env));
   await step(notes, 'Tự dịch tiếng châu Á', () => autoTranslateAsian(env));
+  await step(notes, 'Dịch sẵn Hôm nay', () => pretranslateToday(env));
   await step(notes, 'Dịch', () => translateRequested(env, 2));
   // Giữ tổng yêu cầu mạng dưới 50: nhịp đã crawl đủ 3 nguồn thì để lấy toàn văn cho nhịp sau.
   if (crawled < CRAWL_PER_TICK) await step(notes, 'Toàn văn', () => fetchNextFullText(env));

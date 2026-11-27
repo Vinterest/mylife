@@ -17,7 +17,7 @@ function refill(list){
     var d=new DOMParser().parseFromString(h,'text/html'),src=d.querySelector('[data-list="'+list.getAttribute('data-list')+'"]');
     if(src){var have={};list.querySelectorAll('[data-row]').forEach(function(r){have[r.getAttribute('data-row')]=1});
       src.querySelectorAll(':scope > [data-row]').forEach(function(r){var id=r.getAttribute('data-row');if(!have[id]&&!removed[id]){var n=document.importNode(r,true);n.classList.add('ml-in');list.appendChild(n)}})}
-    if(!list.querySelector('[data-row]'))location.reload();
+    if(!list.querySelector('[data-row]'))location.reload();if(window.mlScanTitles)window.mlScanTitles();
     var pg=d.querySelector('.pgn'),cur=document.querySelector('.pgn');if(pg&&cur)cur.replaceWith(document.importNode(pg,true));
   }).catch(function(){}).then(function(){refilling=false})}
 function send(f,fd){pending++;return fetch(f.action,{method:'POST',body:new URLSearchParams(fd),headers:{'X-Ajax':'1'},credentials:'same-origin',keepalive:true,redirect:'manual'})
@@ -53,3 +53,23 @@ export const ACTIONS_CSS = `.ml-out{opacity:0;margin-top:0!important;margin-bott
 .ml-in{animation:mlIn .25s ease}@keyframes mlIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .ml-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#14202B;color:#fff;padding:.7em 1.1em;border-radius:8px;font-size:.92em;z-index:99;box-shadow:0 4px 18px rgba(0,0,0,.2)}
 @media (prefers-reduced-motion:reduce){.ml-out,.ml-in{transition:none;animation:none}}`;
+
+/*
+ * Dịch đúng lúc tiêu đề + tóm tắt: dòng bài có data-tr="1" (bài tiếng Anh của nguồn bật Dịch mặc định, hoặc bài tiếng
+ * châu Á chưa dịch) được gửi đi dịch khi nó hiện trên màn hình hoặc sắp cuộn tới — gộp tối đa 25 bài/lượt —
+ * rồi đổi chữ tại chỗ. Bài anh không cuộn tới thì không dịch.
+ */
+export const TITLES_JS = `(function(){
+if(!('IntersectionObserver' in window))return;
+var queue=[],timer=0,busy=false;
+function flush(){timer=0;if(busy||!queue.length)return;var rows=queue.splice(0,25);busy=true;
+  fetch('/hoc-tap/dich-tieu-de',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({ids:rows.map(function(r){return r.getAttribute('data-row')})})})
+  .then(function(r){return r.ok?r.json():{}}).then(function(m){rows.forEach(function(row){var x=m[row.getAttribute('data-row')];row.removeAttribute('data-tr');if(!x)return;
+    var a=row.querySelector('.t2');if(a){var last=a.lastChild;if(last&&last.nodeType===3)last.nodeValue=x.t;else a.appendChild(document.createTextNode(x.t));a.setAttribute('lang','vi');a.classList.add('ml-in')}
+    var p=row.querySelector('.sum');if(p&&x.s){p.textContent=x.s;p.setAttribute('lang','vi')}
+    var tag=row.querySelector('.thtag');if(!tag){tag=document.createElement('span');var k=row.querySelector('.kick');if(k)k.after(tag)}if(tag){tag.className='thtag';tag.textContent=x.tag}})})
+  .catch(function(){rows.forEach(function(r){r.setAttribute('data-tr','1')})}).then(function(){busy=false;if(queue.length)timer=setTimeout(flush,50)})}
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting&&e.target.getAttribute('data-tr')==='1'){e.target.setAttribute('data-tr','2');io.unobserve(e.target);queue.push(e.target)}});if(queue.length&&!timer)timer=setTimeout(flush,120)},{rootMargin:'400px 0px'});
+function scan(){document.querySelectorAll('[data-tr="1"]').forEach(function(r){io.observe(r)})}
+window.mlScanTitles=scan;scan();
+})()`;

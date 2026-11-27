@@ -21,7 +21,8 @@ import { APPLE_TOUCH_PNG_B64, ICON_192_PNG_B64, ICON_512_PNG_B64 } from './icon-
 import { appIconSvg, FAVICON_SVG } from './brand';
 import { CHANNEL_ORDER, channelBySlug, vnDay } from './util';
 import { ensureSchema } from './schema';
-import { itemLang } from './lang';
+import { itemLang, LANG_NAME } from './lang';
+import { translateTitles } from './asia';
 import { withDbStats } from './dbstats';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -413,6 +414,16 @@ app.post('/api/nhat', async (c) => {
 });
 
 app.get('/sap-co/:key', (c) => c.html(soonPage(c.req.param('key'))));
+
+// Dịch đúng lúc: trình duyệt gửi id các bài đang hiện trên màn hình còn tiêu đề tiếng gốc (tối đa 25/lượt).
+app.post('/hoc-tap/dich-tieu-de', async (c) => {
+  if (!sameOrigin(c)) return c.json({}, 400);
+  const body = (await c.req.json().catch(() => ({}))) as { ids?: unknown[] };
+  const done = await translateTitles(c.env, (body.ids ?? []).map(Number));
+  const out: Record<number, { t: string; s: string | null; tag: string }> = {};
+  for (const [id, r] of Object.entries(done)) out[Number(id)] = { t: r.t, s: r.s ? (r.s.length > 240 ? `${r.s.slice(0, 240)}…` : r.s) : null, tag: `Dịch từ ${LANG_NAME[r.lang]}` };
+  return c.json(out);
+});
 
 // Bật/tắt "Dịch mặc định Anh → Việt" cho một nguồn, hoặc cho tất cả nguồn.
 app.post('/hoc-tap/nguon/:id/dich', async (c) => {

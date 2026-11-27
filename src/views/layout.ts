@@ -1,4 +1,4 @@
-import { ACTIONS_CSS, ACTIONS_JS } from './actions-js';
+import { ACTIONS_CSS, ACTIONS_JS, TITLES_JS } from './actions-js';
 import { html, raw } from 'hono/html';
 import type { HtmlEscapedString } from 'hono/utils/html';
 import { CHANNELS, CHANNEL_ORDER, vnDateLong } from '../util';
@@ -183,6 +183,7 @@ ${opts.sub ?? ''}
 <main class="wrap">${opts.body}</main>
 <script>${raw(TRACK_JS)}</script>
 <script>${raw(ACTIONS_JS)}</script>
+<script>${raw(TITLES_JS)}</script>
 <style>${raw(ACTIONS_CSS)}</style>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{})}</script>
 </body>
